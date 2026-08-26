@@ -1,0 +1,19 @@
+FROM node:20-alpine AS base
+
+WORKDIR /app
+
+# Copy manifests first so Docker can cache the install layer
+COPY package.json ./
+
+# Use npm install instead of npm ci — the lock file contains Windows-specific
+# platform entries (@img/sharp-win32-*) that don't exist on Linux Alpine.
+# npm install resolves the correct platform packages inside the container.
+RUN npm install --legacy-peer-deps
+
+COPY . .
+# Remove any Windows node_modules that may have been copied over
+RUN rm -rf node_modules/.cache
+
+EXPOSE 3000
+
+CMD ["npm", "run", "dev"]

@@ -1,0 +1,10 @@
+__pycache__
+*.pyc
+*.pyo
+.env
+.env.*
+*.log
+.git
+**/__pycache__
+chrome-profile/
+storage/

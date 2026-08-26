@@ -1,0 +1,34 @@
+{
+  "manifest_version": 3,
+  "name": "Google Flow Automation Helper",
+  "version": "1.0.0",
+  "description": "Automates Google Flow image/video generation under your active session and connects to the local flow-worker.",
+  "permissions": [
+    "tabs",
+    "activeTab",
+    "storage",
+    "alarms",
+    "scripting"
+  ],
+
+  "host_permissions": [
+    "https://labs.google/fx/tools/flow*",
+    "http://localhost:8001/*"
+  ],
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://labs.google/fx/tools/flow*",
+        "https://labs.google/fx/tools/flow/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_end"
+    }
+  ]
+}
