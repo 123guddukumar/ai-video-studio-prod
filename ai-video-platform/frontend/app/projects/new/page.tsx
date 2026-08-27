@@ -27,6 +27,15 @@ const VIDEO_STYLES = [
   "Educational",
   "News Report",
   "Travel Vlog",
+  "Cinematic Photorealistic Commercial",
+  "Cinematic Real Estate Commercial",
+  "Social Media UGC / Lifestyle Ad",
+  "High-Energy Product Commercial",
+  "Emotional Lifestyle Storytelling",
+  "Hollywood Cinematic",
+  "Bollywood Cinematic",
+  "Realistic serious story",
+  "Other",
 ];
 
 const ASPECT_RATIOS = [
@@ -60,6 +69,8 @@ export default function NewProjectPage() {
   const [inputMode, setInputMode] = useState<"topic" | "script">("topic");
 
   const [refImage, setRefImage] = useState<File | null>(null);
+  const [customStyle, setCustomStyle] = useState("");
+  const [isOtherSelected, setIsOtherSelected] = useState(false);
 
   const [form, setForm] = useState<CreateProjectRequest>({
     prompt: "",
@@ -311,13 +322,44 @@ export default function NewProjectPage() {
                 <select
                   className="select-dark"
                   style={{ width: "100%" }}
-                  value={form.video_style}
-                  onChange={(e) => set("video_style", e.target.value)}
+                  value={isOtherSelected ? "Other" : form.video_style}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === "Other") {
+                      setIsOtherSelected(true);
+                      set("video_style", customStyle);
+                    } else {
+                      setIsOtherSelected(false);
+                      set("video_style", val);
+                    }
+                  }}
                 >
                   {VIDEO_STYLES.map((s) => (
                     <option key={s} value={s}>{s}</option>
                   ))}
                 </select>
+                {isOtherSelected && (
+                  <input
+                    type="text"
+                    placeholder="Enter custom video style..."
+                    value={customStyle}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setCustomStyle(val);
+                      set("video_style", val);
+                    }}
+                    style={{
+                      width: "100%",
+                      padding: "10px",
+                      borderRadius: 8,
+                      background: "rgba(13,20,33,0.6)",
+                      border: "1px solid #1e2d45",
+                      color: "white",
+                      fontSize: 13,
+                      marginTop: 8,
+                    }}
+                  />
+                )}
               </div>
             </div>
 
