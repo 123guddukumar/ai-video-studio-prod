@@ -13,7 +13,7 @@
 
   "host_permissions": [
     "https://labs.google/fx/tools/flow*",
-    "http://localhost:8001/*"
+    "http://diin-videoai.duckdns.org:8001/*"
   ],
   "action": {
     "default_popup": "popup.html"

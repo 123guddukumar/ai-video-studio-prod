@@ -1,5 +1,5 @@
 let socket = null;
-let serverUrl = 'http://localhost:8001';
+let serverUrl = 'http://diin-videoai.duckdns.org:8001';
 let runnerState = 'disconnected'; // disconnected, connected, working
 let activeTaskId = null;
 
