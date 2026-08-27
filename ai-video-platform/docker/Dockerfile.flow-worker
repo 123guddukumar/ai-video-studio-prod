@@ -1,15 +1,13 @@
-# Flow Worker — Playwright with Chromium
-FROM python:3.11-slim
+# Flow Worker — Playwright with Chromium pre-installed
+FROM mcr.microsoft.com/playwright/python:v1.47.0-noble
 
 WORKDIR /app
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app
-# Tell Playwright where to store browsers
-ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
-# Minimal build deps — only gcc needed for pip to compile packages
+# Minimal build deps
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     curl \
@@ -17,10 +15,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-
-# playwright install --with-deps handles the FULL Chromium system library list
-# automatically — no need to manually enumerate 120+ X11/Mesa packages.
-RUN playwright install --with-deps chromium
 
 # Remove gcc after pip compile — not needed at runtime
 RUN apt-get purge -y --auto-remove gcc && rm -rf /var/lib/apt/lists/*
