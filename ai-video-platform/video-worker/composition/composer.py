@@ -45,6 +45,7 @@ class VideoComposer:
         subtitle_path: str,
         audio_duration: float | None = None,
         subtitles_enabled: bool = True,
+        subtitle_style: str = "minimalist_white",
         background_music_path: str | None = None,
     ) -> str:
         """
@@ -153,10 +154,10 @@ class VideoComposer:
             final_input = video_with_audio
 
             if subtitles_enabled and Path(subtitle_path).exists():
-                logger.info("[COMPOSE] Burning subtitles")
+                logger.info("[COMPOSE] Burning subtitles", style=subtitle_style)
                 with_subs = str(tmp / "with_subtitles.mp4")
                 try:
-                    burn_subtitles(final_input, subtitle_path, with_subs)
+                    burn_subtitles(final_input, subtitle_path, with_subs, style=subtitle_style)
                     final_input = with_subs
                 except Exception as e:
                     logger.warning(

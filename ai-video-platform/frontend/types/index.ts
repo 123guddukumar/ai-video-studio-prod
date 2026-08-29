@@ -89,6 +89,7 @@ export interface Project {
   resolution: string;
   background_music: boolean;
   subtitles_enabled: boolean;
+  subtitle_style: string | null;
   generation_mode: GenerationMode;
   status: ProjectStatus;
   progress: number;
@@ -172,6 +173,7 @@ export interface CreateProjectRequest {
   resolution?: string;
   background_music?: boolean;
   subtitles_enabled?: boolean;
+  subtitle_style?: string;
   generation_mode?: GenerationMode;
 }
 

@@ -51,6 +51,7 @@ class ProjectService:
             resolution=resolution,
             background_music=data.background_music,
             subtitles_enabled=data.subtitles_enabled,
+            subtitle_style=data.subtitle_style,
             generation_mode=data.generation_mode,
             status=ProjectStatus.DRAFT,
         )

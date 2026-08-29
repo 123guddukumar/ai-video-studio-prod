@@ -56,6 +56,10 @@ def generate_srt(
     If audio_duration is provided, scale timings proportionally.
     """
     output_path = Path(output_path)
+    if output_path.exists() and output_path.stat().st_size > 10:
+        logger.info("Custom subtitles file already exists, skipping generator", path=str(output_path))
+        return str(output_path)
+
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     total_declared_duration = sum(s["duration"] for s in scenes)

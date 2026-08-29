@@ -194,15 +194,39 @@ def burn_subtitles(
     video_path: str,
     subtitle_path: str,
     output_path: str,
-    font_size: int = 24,
-    font_color: str = "white",
+    style: str = "minimalist_white",
 ) -> str:
     """Burn subtitles into the video (hard subtitles)."""
     safe_subtitle = subtitle_path.replace("\\", "/").replace(":", "\\:")
+    
+    SUBTITLE_STYLES = {
+        "minimalist_white": (
+            "FontName=Arial,FontSize=20,PrimaryColour=&H00FFFFFF,"
+            "OutlineColour=&H00000000,Outline=2,Shadow=0,BorderStyle=1,Bold=1"
+        ),
+        "classic_yellow": (
+            "FontName=Arial,FontSize=20,PrimaryColour=&H0000FFFF,"
+            "OutlineColour=&H00000000,Outline=2,Shadow=0,BorderStyle=1,Bold=1"
+        ),
+        "black_box": (
+            "FontName=Arial,FontSize=18,PrimaryColour=&H00FFFFFF,"
+            "BackColour=&H80000000,Outline=0,Shadow=0,BorderStyle=3,Bold=1"
+        ),
+        "tiktok_bold": (
+            "FontName=Impact,FontSize=26,PrimaryColour=&H0000FFFF,"
+            "OutlineColour=&H00000000,Outline=3,Shadow=0,BorderStyle=1,Bold=1"
+        ),
+        "white_box": (
+            "FontName=Arial,FontSize=18,PrimaryColour=&H00000000,"
+            "BackColour=&H00FFFFFF,Outline=0,Shadow=0,BorderStyle=3,Bold=1"
+        )
+    }
+    
+    style_str = SUBTITLE_STYLES.get(style, SUBTITLE_STYLES["minimalist_white"])
+    
     args = [
         "-i", video_path,
-        "-vf", f"subtitles='{safe_subtitle}':force_style='FontSize={font_size},"
-               f"PrimaryColour=&H00FFFFFF,Outline=2,Shadow=0,BorderStyle=3'",
+        "-vf", f"subtitles='{safe_subtitle}':force_style='{style_str}'",
         "-c:v", "libx264",
         "-preset", "ultrafast",
         "-crf", "23",

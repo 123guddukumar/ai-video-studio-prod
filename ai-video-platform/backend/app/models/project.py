@@ -49,6 +49,7 @@ class Project(Base):
     resolution: Mapped[str] = mapped_column(String(20), default="1920x1080")
     background_music: Mapped[bool] = mapped_column(default=False)
     subtitles_enabled: Mapped[bool] = mapped_column(default=True)
+    subtitle_style: Mapped[str | None] = mapped_column(String(50), default="minimalist_white")
 
     # ── Generation settings ─────────────────────────────────────────────────
     generation_mode: Mapped[str] = mapped_column(

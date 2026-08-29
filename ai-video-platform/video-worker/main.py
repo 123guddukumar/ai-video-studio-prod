@@ -49,6 +49,7 @@ class ComposeRequest(BaseModel):
     fps: int = 30
     audio_duration: Optional[float] = None
     subtitles_enabled: bool = True
+    subtitle_style: Optional[str] = "minimalist_white"
     background_music: bool = False
     aspect_ratio: str = "16:9"
 
@@ -80,6 +81,7 @@ async def compose_video(req: ComposeRequest):
                 subtitle_path=req.subtitle_path,
                 audio_duration=req.audio_duration,
                 subtitles_enabled=req.subtitles_enabled,
+                subtitle_style=req.subtitle_style,
                 background_music_path=None,  # TODO: implement background music path
             )
 

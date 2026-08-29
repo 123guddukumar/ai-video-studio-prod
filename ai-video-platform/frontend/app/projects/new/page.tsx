@@ -44,6 +44,74 @@ const ASPECT_RATIOS = [
   { value: "1:1", label: "1:1 Square" },
 ];
 
+const SUBTITLE_STYLES = [
+  {
+    value: "minimalist_white",
+    label: "Minimalist White",
+    previewText: "Asha Vihar Reality",
+    previewStyle: {
+      color: "white",
+      fontWeight: "bold",
+      textShadow: "0px 0px 2px black, 0px 0px 2px black, 0px 0px 2px black, 0px 0px 2px black",
+      fontFamily: "Arial, sans-serif",
+      fontSize: "10px",
+    } as React.CSSProperties
+  },
+  {
+    value: "classic_yellow",
+    label: "Classic Yellow",
+    previewText: "Asha Vihar Reality",
+    previewStyle: {
+      color: "#facc15",
+      fontWeight: "bold",
+      textShadow: "0px 0px 2px black, 0px 0px 2px black, 0px 0px 2px black, 0px 0px 2px black",
+      fontFamily: "Arial, sans-serif",
+      fontSize: "10px",
+    } as React.CSSProperties
+  },
+  {
+    value: "black_box",
+    label: "Opaque Black Box",
+    previewText: "Asha Vihar Reality",
+    previewStyle: {
+      color: "white",
+      fontWeight: "bold",
+      background: "rgba(0,0,0,0.8)",
+      padding: "2px 6px",
+      borderRadius: "4px",
+      fontFamily: "Arial, sans-serif",
+      fontSize: "9px",
+    } as React.CSSProperties
+  },
+  {
+    value: "tiktok_bold",
+    label: "TikTok Bold",
+    previewText: "ASHA VIHAR",
+    previewStyle: {
+      color: "#facc15",
+      fontWeight: "900",
+      textShadow: "0px 0px 3px black, 0px 0px 3px black, 0px 0px 3px black, 0px 0px 3px black",
+      fontFamily: "Impact, sans-serif",
+      fontSize: "12px",
+      letterSpacing: "0.05em",
+    } as React.CSSProperties
+  },
+  {
+    value: "white_box",
+    label: "Opaque White Box",
+    previewText: "Asha Vihar Reality",
+    previewStyle: {
+      color: "black",
+      fontWeight: "bold",
+      background: "white",
+      padding: "2px 6px",
+      borderRadius: "4px",
+      fontFamily: "Arial, sans-serif",
+      fontSize: "9px",
+    } as React.CSSProperties
+  }
+];
+
 const LANGUAGES = [
   { value: "en", label: "English" },
   { value: "hi", label: "Hindi" },
@@ -82,6 +150,7 @@ export default function NewProjectPage() {
     resolution: "1920x1080",
     background_music: false,
     subtitles_enabled: true,
+    subtitle_style: "minimalist_white",
     generation_mode: "fully_automatic",
   });
 
@@ -400,6 +469,49 @@ export default function NewProjectPage() {
               Background Music
             </label>
           </div>
+
+          {/* Subtitle style picker */}
+          {form.subtitles_enabled && (
+            <div className="mt-4 p-4 rounded-xl border border-slate-800/80 bg-slate-950/20">
+              <label className="block mb-3" style={{ color: "#9ca3af", fontSize: 13, fontWeight: 500 }}>
+                Subtitle Style
+              </label>
+              <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))" }}>
+                {SUBTITLE_STYLES.map((style) => {
+                  const isSelected = form.subtitle_style === style.value;
+                  return (
+                    <button
+                      key={style.value}
+                      type="button"
+                      onClick={() => set("subtitle_style", style.value)}
+                      className="flex flex-col items-center gap-2 p-2 rounded-lg transition-all"
+                      style={{
+                        background: isSelected ? "rgba(59,130,246,0.08)" : "rgba(13,20,33,0.4)",
+                        border: isSelected ? "1px solid #3b82f6" : "1px solid #1e2d45",
+                        cursor: "pointer",
+                      }}
+                    >
+                      {/* Mini video scene mockup */}
+                      <div
+                        className="w-full h-16 rounded flex items-end justify-center pb-2 relative overflow-hidden"
+                        style={{
+                          background: "linear-gradient(180deg, #1e293b 0%, #0f172a 100%)",
+                          border: "1px solid rgba(255,255,255,0.05)",
+                        }}
+                      >
+                        <span style={style.previewStyle}>
+                          {style.previewText}
+                        </span>
+                      </div>
+                      <span style={{ fontSize: 11, fontWeight: 500, color: isSelected ? "#60a5fa" : "#9ca3af" }}>
+                        {style.label}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Generation Mode */}

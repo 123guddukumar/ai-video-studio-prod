@@ -138,6 +138,7 @@ class VideoGenerationRequest(BaseModel):
     video_prompt: str
     duration: int
     aspect_ratio: str = "16:9"
+    image_url: Optional[str] = None
 
 
 async def prepare_tab(project_id: str, scene_number: int):
@@ -399,11 +400,25 @@ async def generate_video_only(req: VideoGenerationRequest):
     scene_dir = STORAGE_BASE / req.project_id / "scenes" / f"scene_{req.scene_number:03d}"
     scene_dir.mkdir(parents=True, exist_ok=True)
     video_path = scene_dir / "video.mp4"
+    image_path = scene_dir / "image.png"
 
     # Route through Chrome Extension if connected
     if extension_manager.is_connected:
         logger.info("[FLOW] Routing video generation request through Chrome Extension", scene=req.scene_number)
         task_id = str(uuid.uuid4())
+        
+        # If image_url is not provided but image.png exists locally, load as base64
+        image_url = req.image_url
+        if not image_url and image_path.exists():
+            import base64
+            try:
+                with open(image_path, "rb") as f:
+                    img_bytes = f.read()
+                img_b64 = base64.b64encode(img_bytes).decode("utf-8")
+                image_url = f"data:image/png;base64,{img_b64}"
+            except Exception as e:
+                logger.error("failed_to_encode_local_image_for_extension_task", scene=req.scene_number, error=str(e))
+
         task_data = {
             "type": "TASK_START",
             "task_id": task_id,
@@ -412,7 +427,8 @@ async def generate_video_only(req: VideoGenerationRequest):
             "action": "generate_video",
             "video_prompt": req.video_prompt,
             "duration": req.duration,
-            "aspect_ratio": req.aspect_ratio
+            "aspect_ratio": req.aspect_ratio,
+            "image_url": image_url
         }
         
         result = await extension_manager.send_task(task_data)
@@ -430,6 +446,7 @@ async def generate_video_only(req: VideoGenerationRequest):
     try:
         downloader = Downloader()
         video_gen = VideoGenerator(page, downloader)
+        reference_image_path = image_path if image_path.exists() else None
 
         success = await video_gen.generate(
             project_id=req.project_id,
@@ -437,6 +454,7 @@ async def generate_video_only(req: VideoGenerationRequest):
             video_prompt=req.video_prompt,
             duration=req.duration,
             output_path=video_path,
+            reference_image_path=reference_image_path,
             aspect_ratio=req.aspect_ratio,
         )
         return {"success": success, "video_path": str(video_path) if success else None}

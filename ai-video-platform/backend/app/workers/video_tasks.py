@@ -91,6 +91,7 @@ async def _compose_video_async(task: Task, project_id: str, job_id: str) -> dict
                 "fps": settings.output_fps,
                 "audio_duration": project.narration_duration,
                 "subtitles_enabled": project.subtitles_enabled,
+                "subtitle_style": project.subtitle_style,
                 "background_music": project.background_music,
                 "aspect_ratio": project.aspect_ratio,
             }

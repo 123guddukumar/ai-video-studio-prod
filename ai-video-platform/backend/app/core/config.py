@@ -50,6 +50,7 @@ class Settings(BaseSettings):
     elevenlabs_api_key: str = ""
     elevenlabs_default_voice_id: str = "21m00Tcm4TlvDq8ikWAM"
     elevenlabs_model_id: str = "eleven_monolingual_v1"
+    deepgram_api_key: str = ""
 
     # ── Flow Worker ─────────────────────────────────────────────────────────
     flow_worker_url: str = "http://flow-worker:8001"

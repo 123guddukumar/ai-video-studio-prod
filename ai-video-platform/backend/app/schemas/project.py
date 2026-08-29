@@ -20,6 +20,7 @@ class ProjectCreate(BaseModel):
     resolution: str = Field(default="1920x1080")
     background_music: bool = False
     subtitles_enabled: bool = True
+    subtitle_style: Optional[str] = Field(default="minimalist_white", max_length=50)
     generation_mode: GenerationMode = GenerationMode.FULLY_AUTOMATIC
 
 
@@ -28,6 +29,7 @@ class ProjectUpdate(BaseModel):
     image_style: Optional[str] = None
     generation_mode: Optional[GenerationMode] = None
     subtitles_enabled: Optional[bool] = None
+    subtitle_style: Optional[str] = None
     background_music: Optional[bool] = None
 
 
@@ -45,6 +47,7 @@ class ProjectResponse(BaseModel):
     resolution: str
     background_music: bool
     subtitles_enabled: bool
+    subtitle_style: Optional[str]
     generation_mode: str
     status: str
     progress: float

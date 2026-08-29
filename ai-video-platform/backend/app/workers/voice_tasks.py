@@ -130,6 +130,30 @@ async def _generate_voice_async(task: Task, project_id: str, job_id: str) -> dic
 
             project.narration_url = audio_url
             project.narration_duration = audio_duration
+
+            # ── Deepgram Transcription ───────────────────────────────────────────
+            if project.subtitles_enabled:
+                from app.services.deepgram_service import DeepgramService
+                deepgram = DeepgramService()
+                if deepgram.api_key:
+                    try:
+                        logger.info("starting_deepgram_transcription", project_id=project_id)
+                        words = await deepgram.transcribe_audio(combined_bytes, language=project.language or "en")
+                        srt_content = deepgram.words_to_srt(words, aspect_ratio=project.aspect_ratio or "16:9")
+                        
+                        sub_rel_path = storage.subtitle_path(project_id)
+                        sub_url = await storage.upload_bytes(
+                            srt_content.encode("utf-8"),
+                            sub_rel_path,
+                            "text/plain"
+                        )
+                        project.subtitle_url = sub_url
+                        logger.info("deepgram_subtitles_generated", project_id=project_id, url=sub_url)
+                    except Exception as dg_exc:
+                        logger.error("deepgram_transcription_failed_falling_back", project_id=project_id, error=str(dg_exc))
+                else:
+                    logger.info("deepgram_api_key_not_set_using_estimation_fallback", project_id=project_id)
+
             job.status = JobStatus.COMPLETED
             job.progress = 100.0
             job.output_data = {"audio_url": audio_url, "duration": audio_duration}
