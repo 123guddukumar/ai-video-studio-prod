@@ -238,6 +238,28 @@ function findModeOption(mode) {
   return findElement(`button:has-text('${textToFind}'), [role='menuitem']:has-text('${textToFind}')`);
 }
 
+// Helper to select Model (Nano/Fast) inside the open popover container
+function findModelOption(mode) {
+  // Prefer Imagen 3 (Nano) or Imagen 3 (Fast) for images, Veo 2 (Nano) / Veo (Nano) for videos
+  const searchTerms = mode === 'generate_image' 
+    ? ['imagen 3 (nano)', 'imagen 3 (fast)', 'nano', 'fast']
+    : ['veo 2 (nano)', 'veo (nano)', 'nano', 'fast'];
+
+  const containers = document.querySelectorAll("[role='dialog'], [role='menu'], [role='listbox'], .radix-popover-content, div[class*='popover'], div[class*='content']");
+  for (let container of containers) {
+    const elements = container.querySelectorAll("button, [role='button'], [role='menuitem'], [role='option'], span, div");
+    for (let el of elements) {
+      const text = el.textContent.trim().toLowerCase();
+      for (let term of searchTerms) {
+        if (text === term || text.includes(term)) {
+          return el;
+        }
+      }
+    }
+  }
+  return null;
+}
+
 // Helper to select Aspect Ratio inside the open popover container
 function findRatioOption(ratio) {
   const containers = document.querySelectorAll("[role='dialog'], [role='menu'], [role='listbox'], .radix-popover-content, div[class*='popover'], div[class*='content']");
@@ -390,6 +412,17 @@ async function executeAutomation(params) {
       await sleep(1000);
     } else {
       console.warn('Mode option not found in settings popover.');
+    }
+
+    // Select Model (Nano / Fast)
+    console.log(`Selecting model for: ${action}`);
+    const modelOpt = findModelOption(action);
+    if (modelOpt) {
+      modelOpt.click();
+      await sleep(1000);
+      console.log(`Successfully selected model: ${modelOpt.textContent.trim()}`);
+    } else {
+      console.warn('Model option not found in settings popover.');
     }
     
     // Select Aspect Ratio
