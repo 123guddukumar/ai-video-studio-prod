@@ -58,3 +58,36 @@ ye dekho jab maine script paste kiya aur 30sec ka tha to 30sec selectt kr diya a
 tum  aisa kato do uper buttom laga do ek jo abhi h wo topic se video banana aur ek manually script paste kr ke jab manually script paste krne wla select kr e to usme ek paste box dena jaha script paste kr sake aur uske niche upload reference image option de dena aur language  and ratio select ka option dena aur tum script se video time lenght dekhoge kitna ka h 30sec h script m ya 45 ya 60sec jitna sec ka h utna hi sec ka video banana aur jitna scene h script m utna hi scene prompt generate krna editor director usko scene video ko script ke anusara voideo scene ka time lenght rkhega agr jayada hoga to usko cut ya speed fast kr dega 
 
 aur abhi bahut time laga rha h sab thoda fast kro
+
+
+
+
+Concept 1: Gated Society Security & Family Happiness (भावनात्मक और सुरक्षा)
+Topic Prompt: Create a 30-second emotional real estate ad for Asha Vihar Reality. The video should target young parents. Highlight the contrast between unsafe open streets and a highly secure gated society where kids play safely. Show modern security guards, CCTV cameras, and a beautiful park. The tone should be warm, trustworthy, and premium. Visual style should be cinematic realistic with warm sunlight. Ends with the tagline: "Asha Vihar Reality — सही Property, सही फैसला।"
+
+Concept 2: Investment & Wealth Growth (स्मार्ट इन्वेस्टर्स के लिए)
+Topic Prompt: Create a 30-second logical real estate ad focused on high investment returns with Asha Vihar Reality. Show a smart professional analyzing rising price charts on a tablet, transitioning to a rapidly developing prime location with schools and highways nearby. Highlight the theme of "Rent vs Own" and wealth generation. The tone should be professional, motivational, and confident. Style: Modern corporate cinematic. Ends with brand CTA.
+
+Concept 3: Luxury Living at Affordable Prices (प्रीमियम लाइफस्टाइल)
+Topic Prompt: Create a 30-second premium luxury ad for Asha Vihar Reality. Focus on high-end amenities: a luxury swimming pool, modern clubhouse, fully equipped gymnasium, and jogging track. Emphasize that luxury living is now affordable. The tone should be elegant, inspiring, and elite. Visual style: Sleek architectural camera movement, slow-motion shots, cool cinematic color grading. Ends with brand CTA.
+
+Concept 4: Freedom from Landlord & Rent Hassles (किराए से मुक्ति)
+Topic Prompt: Create a 30-second relatable real estate ad targeting middle-class tenants. Show the frustration of shifting homes and paying monthly rent to a landlord, transitioning to the proud moment of unlocking their own apartment door at Asha Vihar Reality. The tone should be empowering, emotional, and celebratory. Visual style: Warm documentary style. Ends with: "Asha Vihar Reality — सही Property, सही फैसला।"
+
+Concept 5: Peaceful Retirement for Parents (बुजुर्ग माता-पिता के लिए सुकून)
+Topic Prompt: Create a 30-second soft, peaceful ad for Asha Vihar Reality targeting senior citizens. Show retired elderly couple walking hand-in-hand in a green garden, sitting on a bench smiling, with healthcare facilities and peaceful neighborhood nearby. The tone must be calm, respectful, and emotional. Visual style: Soft natural morning lighting, slow panning camera. Ends with brand CTA.
+
+Concept 6: Prime Location & Best Connectivity (लोकेशन का फायदा)
+Topic Prompt: Create a 30-second fast-paced connectivity ad for Asha Vihar Reality. Highlight that schools, hospitals, metro stations, and major highways are just 5 minutes away. Show a professional easily commuting, saving time to spend with family. The tone should be dynamic, energetic, and informative. Visual style: High contrast, aerial drone shots, fast dolly zooms. Ends with brand CTA.
+
+Concept 7: First-Time Home Buyer Pride (युवा प्रोफेशनल्स के लिए)
+Topic Prompt: Create a 30-second celebratory real estate ad targeting IT/Corporate professionals in their late 20s or early 30s. Show a young couple celebrating with friends in their new spacious living room, highlighting the pride of owning their first home. Tone: High-energy, modern, cheerful. Visual style: Vibrant colors, dynamic handheld camera, warm interior lighting.
+
+Concept 8: Smart Home & Modern Architecture (स्मार्ट होम फीचर्स)
+Topic Prompt: Create a 30-second tech-focused architectural ad for Asha Vihar Reality. Show smart home automation (voice control lights, digital video door locks), spacious balconies with green views, and modular kitchens. The tone should be futuristic, sophisticated, and clean. Visual style: Sharp interior design shots, cinematic color grading, smart device interactions.
+
+Concept 9: Festive/Special Discount Offer (सीमित समय की छूट)
+Topic Prompt: Create a 30-second urgent marketing ad for Asha Vihar Reality. Highlight special registry discount, easy home loan approval assistance, and zero hidden charges. The tone should be highly persuasive, exciting, and call-to-action focused. Visual style: Dynamic transitions, bold onscreen text, professional presentation. Ends with: "Asha Vihar Reality — सही Property, सही फैसला।"
+
+Concept 10: Nature & Green Living (प्रकृति के बीच आशियाना)
+Topic Prompt: Create a 30-second environment-friendly ad for Asha Vihar Reality. Highlight 70% open green space, fresh air, dense tree lines, and solar panels in the society. Show residents practicing yoga in the morning mist. Tone: Serene, healthy, refreshing. Visual style: Beautiful volumetric light rays, natural organic green colors, slow zoom-ins.
