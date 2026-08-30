@@ -375,131 +375,77 @@ async function executeAutomation(params) {
 
 
   
-  // ── Step 2: Configure Mode (Image vs Video) ───────────────────────────────
+  // ── Step 2: Configure Mode and Settings inside Popover ────────────────────
   const targetMode = action === 'generate_image' ? 'Image' : 'Video';
-  console.log(`Configuring mode to: ${targetMode}`);
+  console.log(`Configuring mode and settings for target: ${targetMode}`);
   
-  // Try to find a direct mode button/tab first (covering side-by-side buttons)
-  let directModeBtn = null;
-  const allInteractiveElements = document.querySelectorAll("button, [role='tab'], [role='button'], div[class*='tab'], span[class*='tab'], div[class*='item'], span[class*='item']");
-  for (let el of allInteractiveElements) {
-    const text = (el.textContent || "").trim().toLowerCase();
-    // Clean text of non-alphanumeric chars (like emojis, icons, extra spaces)
-    const cleanText = text.replace(/[^a-z0-9]/g, '').trim();
-    const cleanTarget = targetMode.toLowerCase();
-    
-    // Check if it matches exactly or contains it safely
-    if (cleanText === cleanTarget || (cleanText.includes(cleanTarget) && !cleanText.includes("upload") && !cleanText.includes("add") && !cleanText.includes("select"))) {
-      // Verify visibility
-      if (el.offsetWidth > 0 || el.offsetHeight > 0 || el.getClientRects().length > 0) {
-        directModeBtn = el;
-        break;
-      }
-    }
-  }
-
-  if (directModeBtn) {
-    console.log(`Found direct mode button/tab for: ${targetMode}. dispatching simulated click events...`);
-    directModeBtn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
-    directModeBtn.click();
-    directModeBtn.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
-    await sleep(1500); // Wait for transition
-  } else {
-    // Dropdown / Popover approach fallback
-    console.log(`Direct tab button not found. Searching for mode trigger...`);
-    let modeTriggerBtn = null;
-    const allButtons = document.querySelectorAll("button");
-    for (let btn of allButtons) {
-      const text = (btn.textContent || "").trim();
-      if (text === "Image" || text === "Video" || text === "Animate") {
-        modeTriggerBtn = btn;
-        break;
-      }
-    }
-    if (modeTriggerBtn) {
-      console.log(`Clicking mode trigger to open menu...`);
-      modeTriggerBtn.click();
-      await sleep(1000);
-      const modeOpt = findModeOption(action);
-      if (modeOpt) {
-        console.log(`Found mode option in dropdown: ${modeOpt.textContent.trim()}. Clicking...`);
-        modeOpt.click();
-        await sleep(1500);
-      } else {
-        console.warn('Target mode option not found in dropdown. Attempting direct fallback.');
-        const fallbackBtn = findElement(`button:has-text('${targetMode}'), [role='menuitem']:has-text('${targetMode}')`);
-        if (fallbackBtn) {
-          fallbackBtn.click();
-          await sleep(1500);
-        }
-      }
-    }
-  }
-
-  // ── Step 2.5: Configure other settings inside popover menu (Model, Ratio, Duration) ─────────────────────────
-  console.log('Opening settings popover...');
+  // Find settings trigger button (e.g. "Video · 720p · 6s ⧉ x1" or "Image · ...")
   let settingsBtn = null;
-  const buttonsAfterModeSwitch = document.querySelectorAll("button");
-  for (let btn of buttonsAfterModeSwitch) {
+  const allButtons = document.querySelectorAll("button");
+  for (let btn of allButtons) {
     const text = (btn.textContent || "").trim();
-    const html = btn.innerHTML || "";
-    // Exclude add/upload buttons and the mode buttons themselves
-    if (text === "" || text === "+" || text.toLowerCase().includes("add") || html.includes("add") || html.includes("plus") || html.includes("upload") || html.includes("media") || text === "Image" || text === "Video" || text === "Animate") {
-      continue;
-    }
-    // Must look like the settings toggle
     if (
-      text.includes("x1") || 
-      text.includes("x4") || 
-      text.toLowerCase().includes("banana") ||
-      text.toLowerCase().includes("720p") ||
-      text.toLowerCase().includes("1080p") ||
-      text.toLowerCase().includes("nano") ||
-      text.toLowerCase().includes("fast") ||
-      (btn.querySelector("i") && btn.querySelector("i").textContent.includes("crop_"))
+      text.startsWith("Video") || 
+      text.startsWith("Image") || 
+      text.startsWith("Animate") ||
+      text.includes(" · ")
     ) {
       settingsBtn = btn;
       break;
     }
   }
-                    
-  if (settingsBtn) {
-    settingsBtn.click();
-    await sleep(1000); // Wait for popover to open
 
-    // Select Model (Nano / Fast)
+  if (settingsBtn) {
+    console.log(`Found settings button: "${settingsBtn.textContent.trim()}". Clicking to open popover...`);
+    settingsBtn.click();
+    await sleep(1200); // Wait for popover to open
+    
+    // 1. Select Mode (Image vs Video)
+    console.log(`Selecting mode option for: ${action}`);
+    const modeOpt = findModeOption(action);
+    if (modeOpt) {
+      console.log(`Found mode option in popover: "${modeOpt.textContent.trim()}". Clicking...`);
+      modeOpt.click();
+      await sleep(1000);
+    } else {
+      console.warn('Mode option not found in popover.');
+    }
+
+    // 2. Select Model (Nano / Fast)
     console.log(`Selecting model for: ${action}`);
     const modelOpt = findModelOption(action);
     if (modelOpt) {
+      console.log(`Found model option: "${modelOpt.textContent.trim()}". Clicking...`);
       modelOpt.click();
       await sleep(1000);
-      console.log(`Successfully selected model: ${modelOpt.textContent.trim()}`);
     } else {
-      console.warn('Model option not found in settings popover.');
+      console.warn('Model option not found in popover.');
     }
     
-    // Select Aspect Ratio
+    // 3. Select Aspect Ratio
     if (aspect_ratio) {
       console.log(`Selecting aspect ratio: ${aspect_ratio}`);
       const ratioOpt = findRatioOption(aspect_ratio);
       if (ratioOpt) {
+        console.log(`Found aspect ratio option: "${ratioOpt.textContent.trim()}". Clicking...`);
         ratioOpt.click();
         await sleep(1000);
       } else {
-        console.warn('Aspect ratio option not found in settings popover.');
+        console.warn('Aspect ratio option not found in popover.');
       }
     }
     
-    // Select Duration (Timing) if generating video
+    // 4. Select Duration (only for video)
     if (action === 'generate_video') {
       const targetDuration = duration || 6;
       console.log(`Selecting video duration: ${targetDuration}s`);
       const durationOpt = findDurationOption(targetDuration);
       if (durationOpt) {
+        console.log(`Found duration option: "${durationOpt.textContent.trim()}". Clicking...`);
         durationOpt.click();
         await sleep(1000);
       } else {
-        console.warn('Duration option not found in settings popover.');
+        console.warn('Duration option not found in popover.');
       }
     }
     
@@ -508,7 +454,7 @@ async function executeAutomation(params) {
     settingsBtn.click();
     await sleep(800);
   } else {
-    console.warn('Settings button not found. Proceeding with defaults.');
+    console.warn('Could not locate settings trigger button on the page. Proceeding with defaults.');
   }
   
   // ── Step 3: Enter prompt character-by-character (Human simulation) ─────────
