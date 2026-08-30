@@ -226,7 +226,7 @@ function findModeOption(mode) {
   const textToFind = mode === 'generate_image' ? 'Image' : 'Video';
   const containers = document.querySelectorAll("[role='dialog'], [role='menu'], [role='listbox'], .radix-popover-content, div[class*='popover'], div[class*='content']");
   for (let container of containers) {
-    const elements = container.querySelectorAll("button, [role='button'], [role='menuitem'], [role='option']");
+    const elements = container.querySelectorAll("*");
     for (let el of elements) {
       const text = el.textContent.trim().toLowerCase();
       if (text === textToFind.toLowerCase()) {
@@ -247,7 +247,7 @@ function findModelOption(mode) {
 
   const containers = document.querySelectorAll("[role='dialog'], [role='menu'], [role='listbox'], .radix-popover-content, div[class*='popover'], div[class*='content']");
   for (let container of containers) {
-    const elements = container.querySelectorAll("button, [role='button'], [role='menuitem'], [role='option'], span, div");
+    const elements = container.querySelectorAll("*");
     for (let el of elements) {
       const text = el.textContent.trim().toLowerCase();
       for (let term of searchTerms) {
@@ -264,7 +264,7 @@ function findModelOption(mode) {
 function findRatioOption(ratio) {
   const containers = document.querySelectorAll("[role='dialog'], [role='menu'], [role='listbox'], .radix-popover-content, div[class*='popover'], div[class*='content']");
   for (let container of containers) {
-    const elements = container.querySelectorAll("button, [role='button'], [role='menuitem'], [role='option']");
+    const elements = container.querySelectorAll("*");
     for (let el of elements) {
       const text = el.textContent.trim();
       if (text === ratio) {
@@ -281,7 +281,7 @@ function findDurationOption(durationSeconds) {
   const options = [`${durationSeconds}s`, `${durationSeconds} seconds`, `${durationSeconds} Sec`].map(t => t.toLowerCase());
   const containers = document.querySelectorAll("[role='dialog'], [role='menu'], [role='listbox'], .radix-popover-content, div[class*='popover'], div[class*='content']");
   for (let container of containers) {
-    const elements = container.querySelectorAll("button, [role='button'], [role='menuitem'], [role='option']");
+    const elements = container.querySelectorAll("*");
     for (let el of elements) {
       const text = el.textContent.trim().toLowerCase();
       if (options.includes(text)) {
@@ -381,15 +381,16 @@ async function executeAutomation(params) {
   
   // Find settings trigger button (e.g. "Video · 720p · 6s ⧉ x1" or "Image · ...")
   let settingsBtn = null;
-  const allButtons = document.querySelectorAll("button");
+  const allButtons = document.querySelectorAll("button, [role='button'], div, span");
   for (let btn of allButtons) {
     const text = (btn.textContent || "").trim();
-    if (
-      text.startsWith("Video") || 
-      text.startsWith("Image") || 
-      text.startsWith("Animate") ||
-      text.includes(" · ")
-    ) {
+    const textLower = text.toLowerCase();
+    
+    // Signature based settings button detection
+    const hasMode = textLower.startsWith("video") || textLower.startsWith("image") || textLower.startsWith("animate");
+    const hasSetting = textLower.includes("720p") || textLower.includes("1080p") || textLower.includes("x1") || textLower.includes("x4") || textLower.includes("6s") || textLower.includes("3s") || textLower.includes("12s") || text.includes(" · ");
+    
+    if (hasMode && hasSetting && text.length < 50) {
       settingsBtn = btn;
       break;
     }
