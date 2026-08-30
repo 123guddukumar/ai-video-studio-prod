@@ -32,11 +32,11 @@ function log(text, level = 'info') {
   }
   
   chrome.storage.local.get(['logs'], (data) => {
-    const logs = data.logs || [];
-    logs.push({ text, level, timestamp: Date.now() });
+    let localLogs = data.logs || [];
+    localLogs.push({ text, level, timestamp: Date.now() });
     // Cap logs to last 200
-    if (logs.length > 200) logs.shift();
-    chrome.storage.local.set({ logs });
+    if (localLogs.length > 200) localLogs.shift();
+    chrome.storage.local.set({ logs: localLogs });
     
     // Broadcast log to popup if open
     chrome.runtime.sendMessage({ action: 'logAdded', log: { text, level } }).catch(() => {
