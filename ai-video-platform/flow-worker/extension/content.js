@@ -542,24 +542,20 @@ async function executeAutomation(params) {
   await sleep(800);
   
   // ── Step 4: Submit prompt (Press Enter and fallback to click) ──────────────
-  console.log('Submitting prompt with Enter key events...');
+  console.log('Submitting prompt...');
   
-  // Geometrically locate the actual submit button on the right side of the prompt input
-  const promptRect = promptInput.getBoundingClientRect();
-  const btns = Array.from(document.querySelectorAll("button, [role='button'], .submit-btn, div[class*='submit'], div[class*='generate'], div[class*='send'], span[class*='send'], i[class*='send'], svg[class*='send']"));
+  // Find the Create / Submit button (e.g., has arrow_forward icon or "Create" text)
   let submitBtn = null;
-  let maxLeft = 0;
-  for (let btn of btns) {
-    const rect = btn.getBoundingClientRect();
-    // Must be on the right side of the prompt input and vertically aligned with it
-    if (rect.left > promptRect.right - 120 && Math.abs(rect.top - promptRect.top) < 60) {
-      if (rect.left > maxLeft) {
-        maxLeft = rect.left;
-        submitBtn = btn;
-      }
+  const allButtonsOnPage = document.querySelectorAll("button");
+  for (let btn of allButtonsOnPage) {
+    const text = btn.textContent.trim();
+    const hasArrow = btn.querySelector("i")?.textContent.trim() === "arrow_forward";
+    if (text === "Create" || hasArrow) {
+      submitBtn = btn;
+      break;
     }
   }
-  
+
   // Dispatch Enter key events on the text box
   const createEvents = (type) => new KeyboardEvent(type, {
     key: 'Enter',
@@ -572,21 +568,25 @@ async function executeAutomation(params) {
   
   promptInput.dispatchEvent(createEvents('keydown'));
   promptInput.dispatchEvent(createEvents('keypress'));
+  
+  // Also dispatch beforeinput for paragraph break (Enter key in Slate.js)
+  promptInput.dispatchEvent(new InputEvent('beforeinput', {
+    inputType: 'insertParagraph',
+    bubbles: true,
+    cancelable: true
+  }));
+  
   promptInput.dispatchEvent(createEvents('keyup'));
   
-  await sleep(800); // Wait for Slate to process Enter
+  await sleep(1000); // Wait for editor to process Enter
   
-  // Safe Fallback: Only click the submit button if the prompt text is still present in the input box!
-  if (promptInput.textContent.trim().length > 0) {
-    console.log('Enter key did not submit. Clicking the geometric submit button on the right...');
-    if (submitBtn) {
-      submitBtn.click();
-      await sleep(1000);
-    } else {
-      console.warn('Could not locate geometric submit button to click.');
-    }
+  // Fallback: Click the Create/Submit button using our simulated sequence
+  if (submitBtn) {
+    console.log(`Found submit button. Clicking it to trigger generation...`);
+    clickElement(submitBtn);
+    await sleep(1500);
   } else {
-    console.log('Enter key successfully submitted the prompt.');
+    console.warn('Could not locate submit button.');
   }
   
   // ── Step 5: Wait for generation & download ────────────────────────────────
