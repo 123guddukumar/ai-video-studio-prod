@@ -221,6 +221,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   return true;
 });
 
+// Helper to dispatch simulated click/pointer/mouse events to guarantee Radix trigger opens
+function clickElement(el) {
+  if (!el) return;
+  el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, pointerType: 'mouse' }));
+  el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+  el.click();
+  el.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true, pointerType: 'mouse' }));
+  el.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
+}
+
 // Helper to select Mode (Image/Video) inside the open popover container
 function findModeOption(mode) {
   const textToFind = mode === 'generate_image' ? 'Image' : 'Video';
@@ -381,16 +391,19 @@ async function executeAutomation(params) {
   
   // Find settings trigger button (e.g. "Video · 720p · 6s ⧉ x1" or "Image · ...")
   let settingsBtn = null;
-  const allButtons = document.querySelectorAll("button, [role='button'], div, span");
+  const allButtons = document.querySelectorAll("button, [role='button']");
   for (let btn of allButtons) {
     const text = (btn.textContent || "").trim();
     const textLower = text.toLowerCase();
     
     // Signature based settings button detection
-    const hasMode = textLower.startsWith("video") || textLower.startsWith("image") || textLower.startsWith("animate");
-    const hasSetting = textLower.includes("720p") || textLower.includes("1080p") || textLower.includes("x1") || textLower.includes("x4") || textLower.includes("6s") || textLower.includes("3s") || textLower.includes("12s") || text.includes(" · ");
+    const hasMode = textLower.includes("video") || textLower.includes("image") || textLower.includes("animate");
+    const hasSetting = textLower.includes("720p") || textLower.includes("1080p") || textLower.includes("x1") || textLower.includes("x4") || textLower.includes("6s") || textLower.includes("3s") || textLower.includes("12s") || text.includes(" · ") || text.includes("crop_");
     
-    if (hasMode && hasSetting && text.length < 50) {
+    // Must be a radix or popup trigger
+    const isTrigger = btn.getAttribute("aria-haspopup") !== null || btn.getAttribute("id")?.includes("radix-");
+    
+    if (hasMode && hasSetting && isTrigger) {
       settingsBtn = btn;
       break;
     }
@@ -398,7 +411,7 @@ async function executeAutomation(params) {
 
   if (settingsBtn) {
     console.log(`Found settings button: "${settingsBtn.textContent.trim()}". Clicking to open popover...`);
-    settingsBtn.click();
+    clickElement(settingsBtn);
     await sleep(1200); // Wait for popover to open
     
     // 1. Select Mode (Image vs Video)
@@ -406,7 +419,7 @@ async function executeAutomation(params) {
     const modeOpt = findModeOption(action);
     if (modeOpt) {
       console.log(`Found mode option in popover: "${modeOpt.textContent.trim()}". Clicking...`);
-      modeOpt.click();
+      clickElement(modeOpt);
       await sleep(1000);
     } else {
       console.warn('Mode option not found in popover.');
@@ -417,7 +430,7 @@ async function executeAutomation(params) {
     const modelOpt = findModelOption(action);
     if (modelOpt) {
       console.log(`Found model option: "${modelOpt.textContent.trim()}". Clicking...`);
-      modelOpt.click();
+      clickElement(modelOpt);
       await sleep(1000);
     } else {
       console.warn('Model option not found in popover.');
@@ -429,7 +442,7 @@ async function executeAutomation(params) {
       const ratioOpt = findRatioOption(aspect_ratio);
       if (ratioOpt) {
         console.log(`Found aspect ratio option: "${ratioOpt.textContent.trim()}". Clicking...`);
-        ratioOpt.click();
+        clickElement(ratioOpt);
         await sleep(1000);
       } else {
         console.warn('Aspect ratio option not found in popover.');
@@ -443,7 +456,7 @@ async function executeAutomation(params) {
       const durationOpt = findDurationOption(targetDuration);
       if (durationOpt) {
         console.log(`Found duration option: "${durationOpt.textContent.trim()}". Clicking...`);
-        durationOpt.click();
+        clickElement(durationOpt);
         await sleep(1000);
       } else {
         console.warn('Duration option not found in popover.');
@@ -452,7 +465,7 @@ async function executeAutomation(params) {
     
     // Close settings popover by toggling the button closed
     console.log('Closing settings popover...');
-    settingsBtn.click();
+    clickElement(settingsBtn);
     await sleep(800);
   } else {
     console.warn('Could not locate settings trigger button on the page. Proceeding with defaults.');
