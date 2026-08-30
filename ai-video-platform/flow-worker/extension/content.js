@@ -450,13 +450,12 @@ async function executeAutomation(params) {
       const textLower = text.toLowerCase();
       
       // Signature based settings button detection
-      const hasMode = textLower.includes("video") || textLower.includes("image") || textLower.includes("animate");
-      const hasSetting = textLower.includes("720p") || textLower.includes("1080p") || textLower.includes("x1") || textLower.includes("x4") || textLower.includes("6s") || textLower.includes("3s") || textLower.includes("12s") || text.includes(" · ") || text.includes("crop_");
+      const hasSetting = textLower.includes("720p") || textLower.includes("1080p") || textLower.includes("x1") || textLower.includes("x4") || textLower.includes("6s") || textLower.includes("3s") || textLower.includes("12s") || text.includes(" · ") || textLower.includes("banana") || textLower.includes("nano") || textLower.includes("fast") || text.includes("crop_");
       
-      // Must be a radix or popup trigger
-      const isTrigger = btn.getAttribute("aria-haspopup") !== null || btn.getAttribute("id")?.includes("radix-");
+      // Must be a radix menu trigger
+      const isTrigger = btn.getAttribute("aria-haspopup") === "menu" || btn.getAttribute("id")?.includes("radix-");
       
-      if (hasMode && hasSetting && isTrigger) {
+      if (hasSetting && isTrigger && text.length > 2 && text.length < 50) {
         settingsBtn = btn;
         break;
       }
@@ -612,7 +611,8 @@ async function executeAutomation(params) {
       for (let btn of allButtonsOnPage) {
         const text = btn.textContent.trim();
         const hasArrow = btn.querySelector("i")?.textContent.trim() === "arrow_forward";
-        if (text.includes("Create") || hasArrow) {
+        const hasAddIcon = btn.querySelector("i")?.textContent.trim()?.includes("add") || btn.querySelector("i")?.textContent.trim()?.includes("plus");
+        if (hasArrow || (text.includes("Create") && !hasAddIcon)) {
           const isAriaDisabled = btn.getAttribute("aria-disabled") === "true";
           const isDisabled = btn.disabled || isAriaDisabled;
           if (!isDisabled) {
@@ -636,7 +636,8 @@ async function executeAutomation(params) {
       for (let btn of allButtonsOnPage) {
         const text = btn.textContent.trim();
         const hasArrow = btn.querySelector("i")?.textContent.trim() === "arrow_forward";
-        if (text.includes("Create") || hasArrow) {
+        const hasAddIcon = btn.querySelector("i")?.textContent.trim()?.includes("add") || btn.querySelector("i")?.textContent.trim()?.includes("plus");
+        if (hasArrow || (text.includes("Create") && !hasAddIcon)) {
           clickElement(btn);
           await sleep(1500);
           break;
