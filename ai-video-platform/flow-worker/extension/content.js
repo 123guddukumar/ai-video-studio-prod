@@ -602,26 +602,7 @@ async function executeAutomation(params) {
     await sleep(800);
     
     // Submit prompt
-    const createEvents = (type) => new KeyboardEvent(type, {
-      key: 'Enter',
-      code: 'Enter',
-      keyCode: 13,
-      which: 13,
-      bubbles: true,
-      cancelable: true
-    });
-    
-    promptInput.dispatchEvent(createEvents('keydown'));
-    promptInput.dispatchEvent(createEvents('keypress'));
-    
-    promptInput.dispatchEvent(new InputEvent('beforeinput', {
-      inputType: 'insertParagraph',
-      bubbles: true,
-      cancelable: true
-    }));
-    
-    promptInput.dispatchEvent(createEvents('keyup'));
-    await sleep(1000); // Wait for editor to process Enter
+    await sleep(600); // Wait for editor state to sync
     
     // Find and click the ACTIVE enabled submit button (always query fresh DOM right before clicking)
     let submitBtn = null;
@@ -631,7 +612,7 @@ async function executeAutomation(params) {
       for (let btn of allButtonsOnPage) {
         const text = btn.textContent.trim();
         const hasArrow = btn.querySelector("i")?.textContent.trim() === "arrow_forward";
-        if (text === "Create" || hasArrow) {
+        if (text.includes("Create") || hasArrow) {
           const isAriaDisabled = btn.getAttribute("aria-disabled") === "true";
           const isDisabled = btn.disabled || isAriaDisabled;
           if (!isDisabled) {
@@ -655,7 +636,7 @@ async function executeAutomation(params) {
       for (let btn of allButtonsOnPage) {
         const text = btn.textContent.trim();
         const hasArrow = btn.querySelector("i")?.textContent.trim() === "arrow_forward";
-        if (text === "Create" || hasArrow) {
+        if (text.includes("Create") || hasArrow) {
           clickElement(btn);
           await sleep(1500);
           break;
