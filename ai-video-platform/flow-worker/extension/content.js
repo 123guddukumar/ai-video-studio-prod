@@ -595,18 +595,6 @@ async function executeAutomation(params) {
     console.log('Prompt typed successfully.');
     await sleep(800);
     
-    // Find the Create / Submit button
-    let submitBtn = null;
-    const allButtonsOnPage = document.querySelectorAll("button");
-    for (let btn of allButtonsOnPage) {
-      const text = btn.textContent.trim();
-      const hasArrow = btn.querySelector("i")?.textContent.trim() === "arrow_forward";
-      if (text === "Create" || hasArrow) {
-        submitBtn = btn;
-        break;
-      }
-    }
-
     // Submit prompt
     const createEvents = (type) => new KeyboardEvent(type, {
       key: 'Enter',
@@ -627,14 +615,46 @@ async function executeAutomation(params) {
     }));
     
     promptInput.dispatchEvent(createEvents('keyup'));
-    await sleep(1000);
+    await sleep(1000); // Wait for editor to process Enter
+    
+    // Find and click the ACTIVE enabled submit button (always query fresh DOM right before clicking)
+    let submitBtn = null;
+    const startWait = Date.now();
+    while (Date.now() - startWait < 3000) {
+      const allButtonsOnPage = document.querySelectorAll("button");
+      for (let btn of allButtonsOnPage) {
+        const text = btn.textContent.trim();
+        const hasArrow = btn.querySelector("i")?.textContent.trim() === "arrow_forward";
+        if (text === "Create" || hasArrow) {
+          const isAriaDisabled = btn.getAttribute("aria-disabled") === "true";
+          const isDisabled = btn.disabled || isAriaDisabled;
+          if (!isDisabled) {
+            submitBtn = btn;
+            break;
+          }
+        }
+      }
+      if (submitBtn) break;
+      await sleep(100);
+    }
     
     if (submitBtn) {
-      console.log(`Found submit button. Clicking it to trigger generation...`);
+      console.log(`Found active enabled submit button. Clicking it to trigger generation...`);
       clickElement(submitBtn);
       await sleep(1500);
     } else {
-      console.warn('Could not locate submit button.');
+      console.warn('Could not locate an enabled submit button. Fallback clicking any matching button...');
+      // Fallback: Click any matching button even if disabled/loading state is showing
+      const allButtonsOnPage = document.querySelectorAll("button");
+      for (let btn of allButtonsOnPage) {
+        const text = btn.textContent.trim();
+        const hasArrow = btn.querySelector("i")?.textContent.trim() === "arrow_forward";
+        if (text === "Create" || hasArrow) {
+          clickElement(btn);
+          await sleep(1500);
+          break;
+        }
+      }
     }
     
     // Poll until element is present or safety error dialog appears
