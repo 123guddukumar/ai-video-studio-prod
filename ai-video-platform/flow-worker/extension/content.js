@@ -610,8 +610,11 @@ async function executeAutomation(params) {
       const allButtonsOnPage = document.querySelectorAll("button");
       for (let btn of allButtonsOnPage) {
         const text = btn.textContent.trim();
-        const hasArrow = btn.querySelector("i")?.textContent.trim() === "arrow_forward";
-        const hasAddIcon = btn.querySelector("i")?.textContent.trim()?.includes("add") || btn.querySelector("i")?.textContent.trim()?.includes("plus");
+        const html = btn.innerHTML || "";
+        
+        const hasArrow = text.includes("arrow_forward") || html.includes("arrow_forward");
+        const hasAddIcon = text.includes("add") || text.includes("plus") || html.includes("add") || html.includes("plus");
+        
         if (hasArrow || (text.includes("Create") && !hasAddIcon)) {
           const isAriaDisabled = btn.getAttribute("aria-disabled") === "true";
           const isDisabled = btn.disabled || isAriaDisabled;
@@ -635,8 +638,11 @@ async function executeAutomation(params) {
       const allButtonsOnPage = document.querySelectorAll("button");
       for (let btn of allButtonsOnPage) {
         const text = btn.textContent.trim();
-        const hasArrow = btn.querySelector("i")?.textContent.trim() === "arrow_forward";
-        const hasAddIcon = btn.querySelector("i")?.textContent.trim()?.includes("add") || btn.querySelector("i")?.textContent.trim()?.includes("plus");
+        const html = btn.innerHTML || "";
+        
+        const hasArrow = text.includes("arrow_forward") || html.includes("arrow_forward");
+        const hasAddIcon = text.includes("add") || text.includes("plus") || html.includes("add") || html.includes("plus");
+        
         if (hasArrow || (text.includes("Create") && !hasAddIcon)) {
           clickElement(btn);
           await sleep(1500);
