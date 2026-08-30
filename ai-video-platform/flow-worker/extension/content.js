@@ -441,22 +441,28 @@ async function executeAutomation(params) {
   
   // Find settings trigger button (e.g. "Video · 720p · 6s ⧉ x1" or "Image · ...")
   let settingsBtn = null;
-  const allButtons = document.querySelectorAll("button, [role='button']");
-  for (let btn of allButtons) {
-    const text = (btn.textContent || "").trim();
-    const textLower = text.toLowerCase();
-    
-    // Signature based settings button detection
-    const hasMode = textLower.includes("video") || textLower.includes("image") || textLower.includes("animate");
-    const hasSetting = textLower.includes("720p") || textLower.includes("1080p") || textLower.includes("x1") || textLower.includes("x4") || textLower.includes("6s") || textLower.includes("3s") || textLower.includes("12s") || text.includes(" · ") || text.includes("crop_");
-    
-    // Must be a radix or popup trigger
-    const isTrigger = btn.getAttribute("aria-haspopup") !== null || btn.getAttribute("id")?.includes("radix-");
-    
-    if (hasMode && hasSetting && isTrigger) {
-      settingsBtn = btn;
-      break;
+  const startSettingsWait = Date.now();
+  console.log('Waiting for settings button to render in DOM...');
+  while (Date.now() - startSettingsWait < 15000) {
+    const allButtons = document.querySelectorAll("button, [role='button']");
+    for (let btn of allButtons) {
+      const text = (btn.textContent || "").trim();
+      const textLower = text.toLowerCase();
+      
+      // Signature based settings button detection
+      const hasMode = textLower.includes("video") || textLower.includes("image") || textLower.includes("animate");
+      const hasSetting = textLower.includes("720p") || textLower.includes("1080p") || textLower.includes("x1") || textLower.includes("x4") || textLower.includes("6s") || textLower.includes("3s") || textLower.includes("12s") || text.includes(" · ") || text.includes("crop_");
+      
+      // Must be a radix or popup trigger
+      const isTrigger = btn.getAttribute("aria-haspopup") !== null || btn.getAttribute("id")?.includes("radix-");
+      
+      if (hasMode && hasSetting && isTrigger) {
+        settingsBtn = btn;
+        break;
+      }
     }
+    if (settingsBtn) break;
+    await sleep(250);
   }
 
   if (settingsBtn) {
@@ -526,7 +532,7 @@ async function executeAutomation(params) {
   
   // Track pre-existing assets BEFORE submitting the prompt to avoid matching old assets
   const assetSelector = action === 'generate_image'
-    ? "[data-testid='image-result'], img[src], .generated-image"
+    ? "[data-testid='image-result'] img, .generated-image img, img[alt*='generated'], img[src*='googleusercontent'], img[src*='blob:']"
     : "video[src], [data-testid='video-result'] video, .generated-video video, video";
   const preExistingAssets = Array.from(document.querySelectorAll(assetSelector))
     .map(el => el.getAttribute('src'))
@@ -669,6 +675,17 @@ async function executeAutomation(params) {
       for (let el of elements) {
         const srcAttr = el.getAttribute('src');
         if (srcAttr && !srcAttr.startsWith('data:image/svg+xml') && srcAttr.length > 5 && !preExistingAssets.includes(srcAttr)) {
+          // Additional safety check: make sure it is not a tiny UI icon/avatar (avatars are usually < 96px)
+          if (action === 'generate_image') {
+            const isImageTag = el.tagName.toLowerCase() === 'img';
+            if (isImageTag) {
+              const width = el.naturalWidth || el.width || 0;
+              const height = el.naturalHeight || el.height || 0;
+              if (width < 100 && height < 100 && width > 0 && height > 0) {
+                continue; // Skip tiny icons/avatars
+              }
+            }
+          }
           resultElement = el;
           break;
         }
