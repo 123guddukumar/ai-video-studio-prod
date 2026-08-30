@@ -375,24 +375,76 @@ async function executeAutomation(params) {
 
 
   
-  // ── Step 2: Configure settings inside popover menu ─────────────────────────
+  // ── Step 2: Configure Mode (Image vs Video) ───────────────────────────────
+  const targetMode = action === 'generate_image' ? 'Image' : 'Video';
+  console.log(`Configuring mode to: ${targetMode}`);
+  
+  // Try to find a direct mode button/tab first (covering side-by-side buttons)
+  let directModeBtn = null;
+  const allButtons = document.querySelectorAll("button");
+  for (let btn of allButtons) {
+    const text = (btn.textContent || "").trim();
+    if (text.toLowerCase() === targetMode.toLowerCase()) {
+      directModeBtn = btn;
+      break;
+    }
+  }
+
+  if (directModeBtn) {
+    console.log(`Found direct mode button/tab for: ${targetMode}. Clicking...`);
+    directModeBtn.click();
+    await sleep(1500); // Wait for transition
+  } else {
+    // Dropdown / Popover approach fallback
+    console.log(`Direct tab button not found. Searching for mode trigger...`);
+    let modeTriggerBtn = null;
+    for (let btn of allButtons) {
+      const text = (btn.textContent || "").trim();
+      if (text === "Image" || text === "Video" || text === "Animate") {
+        modeTriggerBtn = btn;
+        break;
+      }
+    }
+    if (modeTriggerBtn) {
+      console.log(`Clicking mode trigger to open menu...`);
+      modeTriggerBtn.click();
+      await sleep(1000);
+      const modeOpt = findModeOption(action);
+      if (modeOpt) {
+        console.log(`Found mode option in dropdown: ${modeOpt.textContent.trim()}. Clicking...`);
+        modeOpt.click();
+        await sleep(1500);
+      } else {
+        console.warn('Target mode option not found in dropdown. Attempting direct fallback.');
+        const fallbackBtn = findElement(`button:has-text('${targetMode}'), [role='menuitem']:has-text('${targetMode}')`);
+        if (fallbackBtn) {
+          fallbackBtn.click();
+          await sleep(1500);
+        }
+      }
+    }
+  }
+
+  // ── Step 2.5: Configure other settings inside popover menu (Model, Ratio, Duration) ─────────────────────────
   console.log('Opening settings popover...');
   let settingsBtn = null;
-  const buttons = document.querySelectorAll("button");
-  for (let btn of buttons) {
+  const buttonsAfterModeSwitch = document.querySelectorAll("button");
+  for (let btn of buttonsAfterModeSwitch) {
     const text = (btn.textContent || "").trim();
     const html = btn.innerHTML || "";
-    // Exclude add/upload buttons (like the "+" media button on the left of input) and icon-only buttons
-    if (text === "" || text === "+" || text.toLowerCase().includes("add") || html.includes("add") || html.includes("plus") || html.includes("upload") || html.includes("media")) {
+    // Exclude add/upload buttons and the mode buttons themselves
+    if (text === "" || text === "+" || text.toLowerCase().includes("add") || html.includes("add") || html.includes("plus") || html.includes("upload") || html.includes("media") || text === "Image" || text === "Video" || text === "Animate") {
       continue;
     }
-    // Must look like the settings toggle (contains x1/x4, model names, resolution, duration details, or crop icons)
+    // Must look like the settings toggle
     if (
       text.includes("x1") || 
       text.includes("x4") || 
       text.toLowerCase().includes("banana") ||
       text.toLowerCase().includes("720p") ||
       text.toLowerCase().includes("1080p") ||
+      text.toLowerCase().includes("nano") ||
+      text.toLowerCase().includes("fast") ||
       (btn.querySelector("i") && btn.querySelector("i").textContent.includes("crop_"))
     ) {
       settingsBtn = btn;
@@ -403,16 +455,6 @@ async function executeAutomation(params) {
   if (settingsBtn) {
     settingsBtn.click();
     await sleep(1000); // Wait for popover to open
-    
-    // Select Mode (Image vs Video)
-    console.log(`Selecting mode for: ${action}`);
-    const modeOpt = findModeOption(action);
-    if (modeOpt) {
-      modeOpt.click();
-      await sleep(1000);
-    } else {
-      console.warn('Mode option not found in settings popover.');
-    }
 
     // Select Model (Nano / Fast)
     console.log(`Selecting model for: ${action}`);
