@@ -381,23 +381,34 @@ async function executeAutomation(params) {
   
   // Try to find a direct mode button/tab first (covering side-by-side buttons)
   let directModeBtn = null;
-  const allButtons = document.querySelectorAll("button");
-  for (let btn of allButtons) {
-    const text = (btn.textContent || "").trim();
-    if (text.toLowerCase() === targetMode.toLowerCase()) {
-      directModeBtn = btn;
-      break;
+  const allInteractiveElements = document.querySelectorAll("button, [role='tab'], [role='button'], div[class*='tab'], span[class*='tab'], div[class*='item'], span[class*='item']");
+  for (let el of allInteractiveElements) {
+    const text = (el.textContent || "").trim().toLowerCase();
+    // Clean text of non-alphanumeric chars (like emojis, icons, extra spaces)
+    const cleanText = text.replace(/[^a-z0-9]/g, '').trim();
+    const cleanTarget = targetMode.toLowerCase();
+    
+    // Check if it matches exactly or contains it safely
+    if (cleanText === cleanTarget || (cleanText.includes(cleanTarget) && !cleanText.includes("upload") && !cleanText.includes("add") && !cleanText.includes("select"))) {
+      // Verify visibility
+      if (el.offsetWidth > 0 || el.offsetHeight > 0 || el.getClientRects().length > 0) {
+        directModeBtn = el;
+        break;
+      }
     }
   }
 
   if (directModeBtn) {
-    console.log(`Found direct mode button/tab for: ${targetMode}. Clicking...`);
+    console.log(`Found direct mode button/tab for: ${targetMode}. dispatching simulated click events...`);
+    directModeBtn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
     directModeBtn.click();
+    directModeBtn.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
     await sleep(1500); // Wait for transition
   } else {
     // Dropdown / Popover approach fallback
     console.log(`Direct tab button not found. Searching for mode trigger...`);
     let modeTriggerBtn = null;
+    const allButtons = document.querySelectorAll("button");
     for (let btn of allButtons) {
       const text = (btn.textContent || "").trim();
       if (text === "Image" || text === "Video" || text === "Animate") {
