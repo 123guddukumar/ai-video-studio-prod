@@ -64,215 +64,194 @@ async def _generate_assets_async(task: Task, project_id: str, job_id: str) -> di
                 extra={"total_scenes": total_scenes, "message": "Starting asset generation..."},
             )
 
-            # ── Phase 1: Generate Images for All Scenes ─────────────────────────
-            project.current_stage = "FLOW_IMAGE_GENERATION"
-            await db.commit()
+            # ── Sequential Asset Generation (Scene by Scene) ──────────────────────
+            # For each scene, we generate the image first, then immediately generate
+            # the video using that image as a reference before moving to the next scene.
+            for idx, scene in enumerate(scenes):
+                # ── Step 1: Generate Image for Current Scene ──────────────────────
+                if scene.image_status != SceneStatus.COMPLETED:
+                    logger.info(
+                        "flow_image_generation_started",
+                        project_id=project_id,
+                        scene_number=scene.scene_number,
+                    )
 
-            image_completed = 0
-            for scene in scenes:
-                # Skip already completed images (resume support)
-                if scene.image_status == SceneStatus.COMPLETED:
-                    image_completed += 1
-                    continue
+                    scene.status = SceneStatus.PROCESSING
+                    scene.image_status = SceneStatus.PROCESSING
+                    await db.commit()
 
-                logger.info(
-                    "flow_image_generation_started",
-                    project_id=project_id,
-                    scene_number=scene.scene_number,
-                )
+                    await ws_manager.broadcast_progress(
+                        project_id=project_id,
+                        stage="FLOW_IMAGE_GENERATION",
+                        progress=15.0 + (idx / total_scenes) * 45.0,
+                        status="processing",
+                        extra={
+                            "current_scene": scene.scene_number,
+                            "total_scenes": total_scenes,
+                            "message": f"Generating Image for Scene {scene.scene_number} of {total_scenes}...",
+                        },
+                    )
 
-                scene.status = SceneStatus.PROCESSING
-                scene.image_status = SceneStatus.PROCESSING
-                await db.commit()
+                    # Check for reference image flag in prompt
+                    use_ref_image = scene.image_prompt.startswith("[USE_REF_IMAGE]")
+                    clean_image_prompt = scene.image_prompt
+                    image_url = None
+                    
+                    if use_ref_image:
+                        clean_image_prompt = scene.image_prompt.replace("[USE_REF_IMAGE]", "").strip()
+                        from app.core.storage import storage
+                        ref_image_path = f"{project_id}/reference_image.png"
+                        if await storage.file_exists(ref_image_path):
+                            local_path = storage.get_local_path(ref_image_path)
+                            import base64
+                            import aiofiles
+                            try:
+                                async with aiofiles.open(local_path, "rb") as f:
+                                    img_bytes = await f.read()
+                                img_b64 = base64.b64encode(img_bytes).decode("utf-8")
+                                image_url = f"data:image/png;base64,{img_b64}"
+                                logger.info("loaded_reference_image_for_scene", project_id=project_id, scene_number=scene.scene_number)
+                            except Exception as e:
+                                logger.error("failed_to_encode_ref_image", project_id=project_id, error=str(e))
 
-                await ws_manager.broadcast_progress(
-                    project_id=project_id,
-                    stage="FLOW_IMAGE_GENERATION",
-                    progress=15.0 + (image_completed / total_scenes) * 20.0,
-                    status="processing",
-                    extra={
-                        "current_scene": scene.scene_number,
-                        "total_scenes": total_scenes,
-                        "message": f"Generating Image for Scene {scene.scene_number} of {total_scenes}...",
-                    },
-                )
+                    # Call flow-worker image-only API
+                    img_success = await _call_flow_image_only(
+                        project_id=project_id,
+                        scene_id=scene.id,
+                        scene_number=scene.scene_number,
+                        image_prompt=clean_image_prompt,
+                        aspect_ratio=project.aspect_ratio or "16:9",
+                        image_url=image_url,
+                    )
 
-                # Check for reference image flag in prompt
-                use_ref_image = scene.image_prompt.startswith("[USE_REF_IMAGE]")
-                clean_image_prompt = scene.image_prompt
-                image_url = None
-                
-                if use_ref_image:
-                    clean_image_prompt = scene.image_prompt.replace("[USE_REF_IMAGE]", "").strip()
+                    if img_success:
+                        scene.image_status = SceneStatus.COMPLETED
+                        
+                        # Register generated Image in database
+                        from app.models.asset import Asset, AssetType, AssetStatus
+                        from app.core.storage import storage
+                        
+                        img_rel_path = storage.scene_path(project_id, scene.scene_number, "image.png")
+                        img_public_url = storage.get_public_url(img_rel_path)
+                        img_result = await db.execute(
+                            select(Asset).where(Asset.scene_id == scene.id, Asset.asset_type == AssetType.IMAGE)
+                        )
+                        img_asset = img_result.scalars().first()
+                        if not img_asset:
+                            img_asset = Asset(
+                                scene_id=scene.id,
+                                project_id=project_id,
+                                asset_type=AssetType.IMAGE,
+                            )
+                            db.add(img_asset)
+                        img_asset.status = AssetStatus.COMPLETED
+                        img_asset.storage_path = img_rel_path
+                        img_asset.public_url = img_public_url
+                    else:
+                        scene.status = SceneStatus.FLOW_AUTOMATION_ERROR
+                        scene.image_status = SceneStatus.FAILED
+                        scene.error_message = "Flow worker image generation failed"
+                        await db.commit()
+                        logger.error(
+                            "flow_image_generation_failed",
+                            project_id=project_id,
+                            scene_number=scene.scene_number,
+                        )
+                        raise RuntimeError(f"Scene {scene.scene_number} image generation failed. Aborting pipeline.")
+
+                    await db.commit()
+
+                # ── Step 2: Generate Video for Current Scene (Using Image) ────────
+                if scene.video_status != SceneStatus.COMPLETED:
+                    logger.info(
+                        "flow_video_generation_started",
+                        project_id=project_id,
+                        scene_number=scene.scene_number,
+                    )
+
+                    scene.status = SceneStatus.PROCESSING
+                    scene.video_status = SceneStatus.PROCESSING
+                    await db.commit()
+
+                    await ws_manager.broadcast_progress(
+                        project_id=project_id,
+                        stage="FLOW_VIDEO_GENERATION",
+                        progress=15.0 + (idx / total_scenes) * 45.0 + 4.0, # offset slightly to represent video phase
+                        status="processing",
+                        extra={
+                            "current_scene": scene.scene_number,
+                            "total_scenes": total_scenes,
+                            "message": f"Generating Video for Scene {scene.scene_number} of {total_scenes}...",
+                        },
+                    )
+
+                    # Fetch generated image to pass as reference base64
                     from app.core.storage import storage
-                    ref_image_path = f"{project_id}/reference_image.png"
-                    if await storage.file_exists(ref_image_path):
-                        local_path = storage.get_local_path(ref_image_path)
+                    img_rel_path = storage.scene_path(project_id, scene.scene_number, "image.png")
+                    local_img_path = storage.get_local_path(img_rel_path)
+                    image_url = None
+                    
+                    if await storage.file_exists(img_rel_path):
                         import base64
                         import aiofiles
                         try:
-                            async with aiofiles.open(local_path, "rb") as f:
+                            async with aiofiles.open(local_img_path, "rb") as f:
                                 img_bytes = await f.read()
                             img_b64 = base64.b64encode(img_bytes).decode("utf-8")
                             image_url = f"data:image/png;base64,{img_b64}"
-                            logger.info("loaded_reference_image_for_scene", project_id=project_id, scene_number=scene.scene_number)
                         except Exception as e:
-                            logger.error("failed_to_encode_ref_image", project_id=project_id, error=str(e))
+                            logger.error(
+                                "failed_to_encode_scene_image_for_video_ref",
+                                project_id=project_id,
+                                scene_number=scene.scene_number,
+                                error=str(e)
+                            )
 
-                # Call flow-worker image-only API
-                success = await _call_flow_image_only(
-                    project_id=project_id,
-                    scene_id=scene.id,
-                    scene_number=scene.scene_number,
-                    image_prompt=clean_image_prompt,
-                    aspect_ratio=project.aspect_ratio or "16:9",
-                    image_url=image_url,
-                )
-
-                if success:
-                    scene.image_status = SceneStatus.COMPLETED
-                    
-                    # Register generated Image in database
-                    from app.models.asset import Asset, AssetType, AssetStatus
-                    from app.core.storage import storage
-                    
-                    img_rel_path = storage.scene_path(project_id, scene.scene_number, "image.png")
-                    img_public_url = storage.get_public_url(img_rel_path)
-                    img_result = await db.execute(
-                        select(Asset).where(Asset.scene_id == scene.id, Asset.asset_type == AssetType.IMAGE)
-                    )
-                    img_asset = img_result.scalars().first()
-                    if not img_asset:
-                        img_asset = Asset(
-                            scene_id=scene.id,
-                            project_id=project_id,
-                            asset_type=AssetType.IMAGE,
-                        )
-                        db.add(img_asset)
-                    img_asset.status = AssetStatus.COMPLETED
-                    img_asset.storage_path = img_rel_path
-                    img_asset.public_url = img_public_url
-                    
-                    image_completed += 1
-                else:
-                    scene.status = SceneStatus.FLOW_AUTOMATION_ERROR
-                    scene.image_status = SceneStatus.FAILED
-                    scene.error_message = "Flow worker image generation failed"
-                    logger.error(
-                        "flow_image_generation_failed",
+                    # Call flow-worker video-only API
+                    vid_success = await _call_flow_video_only(
                         project_id=project_id,
+                        scene_id=scene.id,
                         scene_number=scene.scene_number,
+                        video_prompt=scene.video_prompt,
+                        duration=scene.duration,
+                        aspect_ratio=project.aspect_ratio or "16:9",
+                        image_url=image_url,
                     )
 
-                await db.commit()
-
-            # Check if any scene image generation failed
-            failed_images = [s for s in scenes if s.image_status == SceneStatus.FAILED]
-            if failed_images:
-                raise RuntimeError(f"{len(failed_images)} scene image generation tasks failed. Aborting video rendering.")
-
-            # ── Phase 2: Generate Videos from Images for All Scenes ──────────────
-            project.current_stage = "FLOW_VIDEO_GENERATION"
-            await db.commit()
-
-            video_completed = 0
-            for scene in scenes:
-                # Skip already completed videos (resume support)
-                if scene.video_status == SceneStatus.COMPLETED:
-                    video_completed += 1
-                    continue
-
-                logger.info(
-                    "flow_video_generation_started",
-                    project_id=project_id,
-                    scene_number=scene.scene_number,
-                )
-
-                scene.status = SceneStatus.PROCESSING
-                scene.video_status = SceneStatus.PROCESSING
-                await db.commit()
-
-                await ws_manager.broadcast_progress(
-                    project_id=project_id,
-                    stage="FLOW_VIDEO_GENERATION",
-                    progress=35.0 + (video_completed / total_scenes) * 25.0,
-                    status="processing",
-                    extra={
-                        "current_scene": scene.scene_number,
-                        "total_scenes": total_scenes,
-                        "message": f"Generating Video for Scene {scene.scene_number} of {total_scenes}...",
-                    },
-                )
-
-                # Fetch generated image to pass as reference base64
-                from app.core.storage import storage
-                img_rel_path = storage.scene_path(project_id, scene.scene_number, "image.png")
-                local_img_path = storage.get_local_path(img_rel_path)
-                image_url = None
-                
-                if await storage.file_exists(img_rel_path):
-                    import base64
-                    import aiofiles
-                    try:
-                        async with aiofiles.open(local_img_path, "rb") as f:
-                            img_bytes = await f.read()
-                        img_b64 = base64.b64encode(img_bytes).decode("utf-8")
-                        image_url = f"data:image/png;base64,{img_b64}"
-                    except Exception as e:
+                    if vid_success:
+                        scene.status = SceneStatus.COMPLETED
+                        scene.video_status = SceneStatus.COMPLETED
+                        
+                        # Register generated Video in database
+                        from app.models.asset import Asset, AssetType, AssetStatus
+                        
+                        vid_rel_path = storage.scene_path(project_id, scene.scene_number, "video.mp4")
+                        vid_public_url = storage.get_public_url(vid_rel_path)
+                        vid_result = await db.execute(
+                            select(Asset).where(Asset.scene_id == scene.id, Asset.asset_type == AssetType.VIDEO)
+                        )
+                        vid_asset = vid_result.scalars().first()
+                        if not vid_asset:
+                            vid_asset = Asset(
+                                scene_id=scene.id,
+                                project_id=project_id,
+                                asset_type=AssetType.VIDEO,
+                            )
+                            db.add(vid_asset)
+                        vid_asset.status = AssetStatus.COMPLETED
+                        vid_asset.storage_path = vid_rel_path
+                        vid_asset.public_url = vid_public_url
+                    else:
+                        scene.status = SceneStatus.FLOW_AUTOMATION_ERROR
+                        scene.video_status = SceneStatus.FAILED
+                        scene.error_message = "Flow worker video generation failed"
                         logger.error(
-                            "failed_to_encode_scene_image_for_video_ref",
+                            "flow_video_generation_failed",
                             project_id=project_id,
                             scene_number=scene.scene_number,
-                            error=str(e)
                         )
 
-                # Call flow-worker video-only API
-                success = await _call_flow_video_only(
-                    project_id=project_id,
-                    scene_id=scene.id,
-                    scene_number=scene.scene_number,
-                    video_prompt=scene.video_prompt,
-                    duration=scene.duration,
-                    aspect_ratio=project.aspect_ratio or "16:9",
-                    image_url=image_url,
-                )
-
-                if success:
-                    scene.status = SceneStatus.COMPLETED
-                    scene.video_status = SceneStatus.COMPLETED
-                    
-                    # Register generated Video in database
-                    from app.models.asset import Asset, AssetType, AssetStatus
-                    
-                    vid_rel_path = storage.scene_path(project_id, scene.scene_number, "video.mp4")
-                    vid_public_url = storage.get_public_url(vid_rel_path)
-                    vid_result = await db.execute(
-                        select(Asset).where(Asset.scene_id == scene.id, Asset.asset_type == AssetType.VIDEO)
-                    )
-                    vid_asset = vid_result.scalars().first()
-                    if not vid_asset:
-                        vid_asset = Asset(
-                            scene_id=scene.id,
-                            project_id=project_id,
-                            asset_type=AssetType.VIDEO,
-                        )
-                        db.add(vid_asset)
-                    vid_asset.status = AssetStatus.COMPLETED
-                    vid_asset.storage_path = vid_rel_path
-                    vid_asset.public_url = vid_public_url
-                    
-                    video_completed += 1
-                else:
-                    scene.status = SceneStatus.FLOW_AUTOMATION_ERROR
-                    scene.video_status = SceneStatus.FAILED
-                    scene.error_message = "Flow worker video generation failed"
-                    logger.error(
-                        "flow_video_generation_failed",
-                        project_id=project_id,
-                        scene_number=scene.scene_number,
-                    )
-
-                await db.commit()
+                    await db.commit()
 
             # All scenes done — move to voice generation
             job.status = JobStatus.COMPLETED
@@ -287,10 +266,19 @@ async def _generate_assets_async(task: Task, project_id: str, job_id: str) -> di
                     failed_count=len(failed_videos),
                 )
 
+            # Broadcast final completion for FLOW_VIDEO_GENERATION to update UI properly
+            await ws_manager.broadcast_progress(
+                project_id=project_id,
+                stage="FLOW_VIDEO_GENERATION",
+                progress=60.0,
+                status="completed",
+                extra={"message": "All assets generated successfully!"},
+            )
+
             await db.commit()
             await _queue_voice_generation(db, project_id)
 
-            return {"status": "completed", "total_scenes": total_scenes, "completed": video_completed}
+            return {"status": "completed", "total_scenes": total_scenes, "completed": total_scenes - len(failed_videos)}
 
         except Exception as exc:
             logger.error("asset_generation_failed", project_id=project_id, error=str(exc))
