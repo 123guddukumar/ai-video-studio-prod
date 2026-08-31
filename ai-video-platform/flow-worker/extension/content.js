@@ -636,6 +636,26 @@ async function executeAutomation(params) {
       });
       console.log('CDP click result:', cdpResult);
       await sleep(1500);
+
+      // Self-healing check: if the editor textbox still has text, the submit event did not trigger.
+      // Fallback by direct-clicking the HTML submit button.
+      if (promptInput.textContent.trim().length > 0) {
+        console.warn('[Content] Prompt text still remains after CDP click. Attempting direct submit button click fallback...');
+        let submitBtn = null;
+        for (const b of document.querySelectorAll('button')) {
+          const iEl = b.querySelector('i');
+          if (iEl && iEl.textContent.trim() === 'arrow_forward') { submitBtn = b; break; }
+        }
+        if (submitBtn) {
+          submitBtn.removeAttribute('aria-disabled');
+          submitBtn.removeAttribute('disabled');
+          submitBtn.disabled = false;
+          await sleep(50);
+          submitBtn.click();
+          console.log('[Content] Direct click fallback triggered.');
+          await sleep(1000);
+        }
+      }
     } else {
       // ── Fallback: execCommand insert + direct click ───────────────────────
       console.warn('Injector did not return coords (' + injectorResponse.result + '). Using execCommand fallback.');
