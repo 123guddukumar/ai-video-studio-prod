@@ -556,32 +556,41 @@ async function executeAutomation(params) {
     promptInput.click();
     await sleep(200);
     promptInput.focus();
-    
-    // Select all and delete existing content
     document.execCommand('selectAll', false, null);
     await sleep(100);
     document.execCommand('delete', false, null);
     await sleep(300);
 
-    // ── Paste the prompt using a native DataTransfer paste event ──────────────
-    // Slate.js properly handles paste events and updates its internal state.
-    // execCommand('insertText') only updates the DOM visually — Slate ignores it.
-    const dataTransfer = new DataTransfer();
-    dataTransfer.setData('text/plain', currentPrompt);
-    dataTransfer.setData('text', currentPrompt);
+    // ── Inject text via React's internal fiber/nativeEvent setter ────────────
+    // Slate.js maintains its own internal state via React. We must update the
+    // React fiber's value setter directly — not just the DOM — to register text.
+    // Strategy 1: React nativeInputValueSetter on any inner input
+    // Strategy 2: Direct Slate paste event with DataTransfer
+    // Strategy 3: Simulate user typing using beforeinput only (Slate listens to this)
     
-    const pasteEvent = new ClipboardEvent('paste', {
+    // Strategy 3 is most reliable: Slate DOES listen to 'beforeinput' with insertText
+    // But we must NOT fire keydown/keyup as those interfere with Slate's composition
+    promptInput.focus();
+    await sleep(100);
+    
+    // Insert the whole prompt as one beforeinput event  
+    const insertEvent = new InputEvent('beforeinput', {
+      inputType: 'insertText',
+      data: currentPrompt,
       bubbles: true,
-      cancelable: true,
-      clipboardData: dataTransfer
+      cancelable: true
     });
+    promptInput.dispatchEvent(insertEvent);
+    await sleep(500);
     
-    promptInput.dispatchEvent(pasteEvent);
-    await sleep(500); // Wait for Slate to process paste
+    // Also try execCommand as secondary fallback (some Slate versions handle it)
+    if (!promptInput.textContent || promptInput.textContent.trim() === '') {
+      document.execCommand('insertText', false, currentPrompt);
+      await sleep(300);
+    }
     
-    // Verify text was inserted (Slate should have updated its internal state)
     const typedText = promptInput.textContent || "";
-    console.log(`Prompt pasted. Editor now contains: "${typedText.substring(0, 50)}..."`);
+    console.log(`Prompt inserted. Editor contains: "${typedText.substring(0, 60)}"`);
     await sleep(500);
     
     // Submit prompt
