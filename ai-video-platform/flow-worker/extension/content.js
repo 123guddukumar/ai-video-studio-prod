@@ -536,14 +536,14 @@ async function executeAutomation(params) {
   // ── Step 3: Enter prompt & generation wrapper with retry on safety block ──
   const promptInput = await waitForElement("div[role='textbox'], div[data-slate-editor='true']", 15000);
   
-  // Track pre-existing assets BEFORE submitting the prompt to avoid matching old assets
-  const assetSelector = action === 'generate_image'
-    ? "[data-testid='image-result'] img, .generated-image img, img[alt*='generated'], img[src*='googleusercontent'], img[src*='blob:']"
-    : "video[src], [data-testid='video-result'] video, .generated-video video, video";
-  const preExistingAssets = Array.from(document.querySelectorAll(assetSelector))
-    .map(el => el.getAttribute('src'))
-    .filter(Boolean);
-  console.log(`Tracking ${preExistingAssets.length} pre-existing asset URLs to avoid premature matching.`);
+  // Snapshot ALL img and video srcs before submission so we can detect any NEW ones
+  // This is broader than specific URL patterns — catches any generated asset format.
+  const preExistingAssets = new Set(
+    Array.from(document.querySelectorAll('img[src], video[src]'))
+      .map(el => el.getAttribute('src'))
+      .filter(Boolean)
+  );
+  console.log(`Snapshotted ${preExistingAssets.size} pre-existing asset URLs before generation.`);
 
   let currentPrompt = prompt;
   const maxAttempts = 3;
@@ -634,39 +634,68 @@ async function executeAutomation(params) {
     const startTime = Date.now();
     let errorDetected = null;
     
+    let pollCount = 0;
     while (Date.now() - startTime < timeoutLimit) {
-      // 1. Check for success (Asset loaded)
-      const elements = document.querySelectorAll(assetSelector);
-      for (let el of elements) {
-        const srcAttr = el.getAttribute('src');
-        if (srcAttr && !srcAttr.startsWith('data:image/svg+xml') && srcAttr.length > 5 && !preExistingAssets.includes(srcAttr)) {
-          // Additional safety check: make sure it is not a tiny UI icon/avatar (avatars are usually < 96px)
-          if (action === 'generate_image') {
-            const isImageTag = el.tagName.toLowerCase() === 'img';
-            if (isImageTag) {
-              const width = el.naturalWidth || el.width || 0;
-              const height = el.naturalHeight || el.height || 0;
-              if (width < 100 && height < 100 && width > 0 && height > 0) {
-                continue; // Skip tiny icons/avatars
-              }
-            }
-          }
+      pollCount++;
+      // Log progress every 10 seconds so user knows it's running
+      if (pollCount % 5 === 1) {
+        const elapsed = Math.round((Date.now() - startTime) / 1000);
+        console.log(`[Poll ${pollCount}] Waiting for generated asset... (${elapsed}s elapsed)`);
+      }
+
+      // 1. Scan ALL imgs and videos for any new src not in the pre-existing snapshot
+      const allMediaEls = document.querySelectorAll('img[src], video[src]');
+      for (const el of allMediaEls) {
+        const src = el.getAttribute('src');
+        if (!src) continue;
+        if (src.startsWith('data:image/svg+xml')) continue; // skip SVG placeholders
+        if (src.length < 10) continue;                      // skip empty/tiny srcs
+        if (preExistingAssets.has(src)) continue;           // skip pre-existing
+
+        const tag = el.tagName.toLowerCase();
+
+        if (action === 'generate_image' && tag === 'img') {
+          // Skip tiny UI icons (< 100px)
+          const w = el.naturalWidth || el.width || 0;
+          const h = el.naturalHeight || el.height || 0;
+          if (w > 0 && h > 0 && w < 100 && h < 100) continue;
+          resultElement = el;
+          break;
+        } else if (action === 'generate_video' && tag === 'video') {
+          resultElement = el;
+          break;
+        } else if (action === 'generate_image' && tag === 'img') {
+          // naturalWidth may be 0 if not yet loaded — accept it optimistically
           resultElement = el;
           break;
         }
       }
+
+      // Wider sweep: if image mode and no match yet, accept any new large img
+      if (!resultElement && action === 'generate_image') {
+        for (const el of allMediaEls) {
+          const src = el.getAttribute('src');
+          if (!src || src.startsWith('data:image/svg+xml') || src.length < 10) continue;
+          if (preExistingAssets.has(src)) continue;
+          if (el.tagName.toLowerCase() === 'img') {
+            resultElement = el;
+            break;
+          }
+        }
+      }
+
       if (resultElement) {
-        console.log('New result asset loaded successfully with source:', resultElement.getAttribute('src'));
+        console.log('✅ New result asset detected! src:', resultElement.getAttribute('src').substring(0, 120));
         break;
       }
-      
+
       // 2. Check for safety/unusual activity errors
       errorDetected = checkGenerationError();
       if (errorDetected) {
         console.warn(`Error/Safety filter detected: ${errorDetected}`);
         break;
       }
-      
+
       await sleep(2000);
     }
     
