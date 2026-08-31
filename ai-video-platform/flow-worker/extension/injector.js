@@ -49,14 +49,27 @@ async function handleInsertText(text) {
     editorEl.focus();
     await sleep(100);
 
-    // Delete all existing text character by character
+    // Select all and delete in a single operation to prevent Slate desync
     try {
-      const existingText = editorEl.textContent || '';
-      for (let i = 0; i < existingText.length + 5; i++) {
-        slateEditor.deleteBackward('character');
+      if (slateEditor.selectAll) {
+        slateEditor.selectAll();
+      } else {
+        const range = document.createRange();
+        range.selectNodeContents(editorEl);
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
       }
-    } catch(e) {}
-    await sleep(100);
+      await sleep(100);
+      if (slateEditor.deleteFragment) {
+        slateEditor.deleteFragment();
+      } else {
+        document.execCommand('delete', false, null);
+      }
+    } catch(e) {
+      console.warn("[Injector] Clear error:", e);
+    }
+    await sleep(150);
 
     // ── 4. Insert text via Slate's own insertText ─────────────────────────────
     slateEditor.insertText(text);
