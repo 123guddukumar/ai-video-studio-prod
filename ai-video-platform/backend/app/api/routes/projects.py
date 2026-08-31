@@ -290,7 +290,7 @@ async def retry_project(
         await db.commit()
         return {"message": "Retrying script generation", "stage": stage, "job_id": job.id}
 
-    elif stage == "FLOW_IMAGE_GENERATION":
+    elif stage in ("FLOW_IMAGE_GENERATION", "FLOW_VIDEO_GENERATION"):
         result_scenes = await db.execute(
             select(Scene).where(Scene.project_id == project_id)
         )
