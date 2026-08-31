@@ -32,10 +32,12 @@ class VideoComposer:
         project_id: str,
         resolution: str = "1920x1080",
         fps: int = 30,
+        aspect_ratio: str = "16:9",
     ) -> None:
         self.project_id = project_id
         self.resolution = resolution
         self.fps = fps
+        self.aspect_ratio = aspect_ratio
 
     def compose(
         self,
@@ -73,6 +75,7 @@ class VideoComposer:
                     scenes=scene_videos,
                     output_path=subtitle_path,
                     audio_duration=audio_duration,
+                    aspect_ratio=self.aspect_ratio,
                 )
 
             # ── Step 2: Normalize each scene video ──────────────────────────────

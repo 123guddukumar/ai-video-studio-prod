@@ -546,7 +546,11 @@ function FinalVideoTab({ project, onRefresh }: { project: Project; onRefresh: ()
 
       {/* Video player */}
       <div className="glass-card" style={{ padding: "24px" }}>
-        <div className="video-container mb-4">
+        <div className="video-container mb-4" style={{
+          aspectRatio: project.aspect_ratio === "9:16" ? "9/16" : project.aspect_ratio === "1:1" ? "1/1" : "16/9",
+          maxWidth: project.aspect_ratio === "9:16" ? "360px" : project.aspect_ratio === "1:1" ? "480px" : "100%",
+          margin: "0 auto"
+        }}>
           <video
             src={project.final_video_url}
             controls

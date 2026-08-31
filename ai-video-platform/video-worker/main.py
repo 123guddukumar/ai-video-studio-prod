@@ -73,6 +73,7 @@ async def compose_video(req: ComposeRequest):
                 project_id=req.project_id,
                 resolution=req.resolution,
                 fps=req.fps,
+                aspect_ratio=req.aspect_ratio,
             )
             return composer.compose(
                 scene_videos=[s.model_dump() for s in req.scene_videos],

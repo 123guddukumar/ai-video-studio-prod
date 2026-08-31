@@ -201,24 +201,29 @@ def burn_subtitles(
     
     SUBTITLE_STYLES = {
         "minimalist_white": (
-            "FontName=Arial,FontSize=20,PrimaryColour=&H00FFFFFF,"
-            "OutlineColour=&H00000000,Outline=2,Shadow=0,BorderStyle=1,Bold=1"
+            "FontName=Sans,FontSize=22,PrimaryColour=&H00FFFFFF,"
+            "OutlineColour=&H00000000,Outline=1.5,Shadow=0,BorderStyle=1,Bold=1,"
+            "Alignment=2,MarginV=30"
         ),
         "classic_yellow": (
-            "FontName=Arial,FontSize=20,PrimaryColour=&H0000FFFF,"
-            "OutlineColour=&H00000000,Outline=2,Shadow=0,BorderStyle=1,Bold=1"
+            "FontName=Sans,FontSize=22,PrimaryColour=&H0000FFFF,"
+            "OutlineColour=&H00000000,Outline=1.5,Shadow=0,BorderStyle=1,Bold=1,"
+            "Alignment=2,MarginV=30"
         ),
         "black_box": (
-            "FontName=Arial,FontSize=18,PrimaryColour=&H00FFFFFF,"
-            "BackColour=&H80000000,Outline=0,Shadow=0,BorderStyle=3,Bold=1"
+            "FontName=Sans,FontSize=18,PrimaryColour=&H00FFFFFF,"
+            "BackColour=&H80000000,Outline=0,Shadow=0,BorderStyle=3,Bold=1,"
+            "Alignment=2,MarginV=30"
         ),
         "tiktok_bold": (
-            "FontName=Impact,FontSize=26,PrimaryColour=&H0000FFFF,"
-            "OutlineColour=&H00000000,Outline=3,Shadow=0,BorderStyle=1,Bold=1"
+            "FontName=Sans,FontSize=26,PrimaryColour=&H0000FFFF,"
+            "OutlineColour=&H00000000,Outline=2.5,Shadow=0,BorderStyle=1,Bold=1,"
+            "Alignment=2,MarginV=30"
         ),
         "white_box": (
-            "FontName=Arial,FontSize=18,PrimaryColour=&H00000000,"
-            "BackColour=&H00FFFFFF,Outline=0,Shadow=0,BorderStyle=3,Bold=1"
+            "FontName=Sans,FontSize=18,PrimaryColour=&H00000000,"
+            "BackColour=&H00FFFFFF,Outline=0,Shadow=0,BorderStyle=3,Bold=1,"
+            "Alignment=2,MarginV=30"
         )
     }
     

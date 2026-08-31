@@ -35,12 +35,13 @@ RULES:
 - Scene durations must sum exactly to the requested total duration.
 - Narration must be natural, engaging, and match scene duration (approximately 
   2.5 words per second).
-- Image and video prompts must be highly cinematic, descriptive, but concise (maximum 30 words each) to stay within token limits.
+- Image and video prompts must be highly cinematic, descriptive, but concise (maximum 35 words each) to stay within token limits.
 - Include camera movements, lighting, subject, environment, composition.
 - Never include text overlays, logos, or watermarks in prompts.
 - Maintain visual consistency across all scenes using the visual_style object.
 - Scene numbers must be sequential starting at 1.
 - MULTI-LANGUAGE RULE: If the target language is NOT English, write ONLY the `narration` (voiceover) and the `title` in that language. All other JSON fields (image_prompt, video_prompt, visual_description, visual_style, color_style, camera_style, environment_style) MUST be in English. This is required because image generation models only understand English prompts, and it prevents token count overflow.
+- REAL ESTATE & PREMIUM BUSINESS RULE: If the project topic is about real estate, property sales, or premium/corporate business, you MUST generate highly realistic, photorealistic, luxury-focused, and premium prompts. Avoid terms like "illustration", "cartoon", "3D render", "unreal engine". Instead, use descriptors like "photorealistic", "ultra-high-end modern architectural photography", "soft morning volumetric lighting", "immaculately styled luxury interior design", "sleek, modern, and realistic drone shots", "high-end real estate presentation", "professional cinematography with shallow depth of field". Ensure the subject is portrayed in a premium, elegant, and realistic light.
 """
 
 def _build_user_prompt(

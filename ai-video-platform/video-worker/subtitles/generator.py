@@ -46,6 +46,7 @@ def generate_srt(
     scenes: list[dict],
     output_path: str | Path,
     audio_duration: float | None = None,
+    aspect_ratio: str = "16:9",
 ) -> str:
     """
     Generate an SRT subtitle file from scenes.
@@ -83,7 +84,8 @@ def generate_srt(
         scene_end = cursor + scene["duration"] * scale_factor
 
         # Split into subtitle blocks (max 2 lines per block, ~5s each)
-        lines = _split_narration_into_lines(narration)
+        max_chars = 30 if aspect_ratio == "9:16" else 55
+        lines = _split_narration_into_lines(narration, max_chars=max_chars)
 
         # Group lines into blocks of 2
         for i in range(0, len(lines), 2):

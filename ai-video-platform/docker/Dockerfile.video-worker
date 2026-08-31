@@ -7,11 +7,14 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app
 
-# Install FFmpeg
+# Install FFmpeg and Fonts (supporting Hindi/Devanagari characters)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     ffmpeg \
     curl \
+    fonts-dejavu \
+    fonts-noto-core \
+    fontconfig \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
