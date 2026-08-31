@@ -571,48 +571,11 @@ async function executeAutomation(params) {
     // Type character-by-character letting browser handle cursor movements and React state updates natively
     for (let i = 0; i < currentPrompt.length; i++) {
       const char = currentPrompt[i];
-      
-      promptInput.dispatchEvent(new KeyboardEvent('keydown', {
-        key: char,
-        code: char === ' ' ? 'Space' : `Key${char.toUpperCase()}`,
-        bubbles: true,
-        cancelable: true
-      }));
-      
-      promptInput.dispatchEvent(new InputEvent('beforeinput', {
-        inputType: 'insertText',
-        data: char,
-        bubbles: true,
-        cancelable: true
-      }));
-      
       document.execCommand('insertText', false, char);
-      
-      promptInput.dispatchEvent(new InputEvent('input', {
-        inputType: 'insertText',
-        data: char,
-        bubbles: true
-      }));
-      
-      promptInput.dispatchEvent(new KeyboardEvent('keyup', {
-        key: char,
-        code: char === ' ' ? 'Space' : `Key${char.toUpperCase()}`,
-        bubbles: true,
-        cancelable: true
-      }));
-      
-      await sleep(15 + Math.random() * 20); // 15-35ms human-like delay
+      await sleep(20 + Math.random() * 20); // 20-40ms human-like delay
     }
     
-    // Dispatch a final input event representing the full typed text to force React/Slate state to sync
-    promptInput.dispatchEvent(new InputEvent('input', {
-      bubbles: true,
-      cancelable: true,
-      inputType: 'insertText',
-      data: currentPrompt
-    }));
-    
-    console.log('Prompt typed successfully and React/Slate inputs synchronized.');
+    console.log('Prompt typed successfully using native input.');
     await sleep(800);
     
     // Submit prompt
