@@ -784,33 +784,11 @@ async function executeAutomation(params) {
   
   // ── Step 6: Fetch file data & convert to base64 ────────────────────────────
   console.log('Fetching asset data from URL:', assetUrl);
-  let dataUrl = null;
-  let fileBlob = null;
+  const dataUrl = await fetchAssetAsDataUrl(assetUrl);
   
-  if (assetUrl.startsWith('blob:')) {
-    // Local blob URLs can only be fetched from the page context
-    fileBlob = await fetchAssetBlob(assetUrl);
-    dataUrl = await convertBlobToDataUrl(fileBlob);
-  } else {
-    // Remote URLs (https://...) are fetched from background script to bypass CORS
-    console.log('Remote asset URL detected. Routing fetch to background script to bypass CORS...');
-    const fetchResponse = await new Promise((resolve) => {
-      chrome.runtime.sendMessage({
-        type: 'FETCH_ASSET',
-        url: assetUrl
-      }, (response) => {
-        resolve(response || { ok: false, error: 'No response from background' });
-      });
-    });
-    
-    if (fetchResponse.ok && fetchResponse.dataUrl) {
-      dataUrl = fetchResponse.dataUrl;
-      // Convert the fetched base64 back to Blob so local download still works
-      fileBlob = dataURLtoFileBlob(dataUrl);
-    } else {
-      throw new Error(`Failed to fetch remote asset data: ${fetchResponse.error || 'unknown error'}`);
-    }
-  }
+  // Re-create fileBlob from dataUrl for the local download link to bypass CSP
+  const responseBlob = await fetch(dataUrl);
+  const fileBlob = await responseBlob.blob();
   
   // Trigger local browser download safely using same-origin Blob URL to prevent page navigation
   try {
@@ -880,13 +858,31 @@ function extractVideoThumbnail(videoUrl) {
   });
 }
 
-// Fetch blob under Google's page origin to bypass CORS restrictions
-async function fetchAssetBlob(url) {
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`Failed to fetch asset from URL (${url}): HTTP ${response.status}`);
+// Fetch asset data URL with background script fallback to bypass CORS/CSP restrictions
+async function fetchAssetAsDataUrl(url) {
+  if (url.startsWith('blob:')) {
+    // blob: URLs must be fetched in content script (same origin)
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`Failed to fetch blob URL: HTTP ${res.status}`);
+    const blob = await res.blob();
+    return await convertBlobToDataUrl(blob);
+  } else {
+    // Network URLs (http/https) are fetched in background.js to bypass CORS/CSP
+    console.log('[Content] Requesting background fetch for network URL:', url);
+    const response = await new Promise((resolve) => {
+      chrome.runtime.sendMessage({
+        type: 'FETCH_NETWORK_URL',
+        url: url
+      }, (res) => {
+        resolve(res || { success: false, error: 'No response from background' });
+      });
+    });
+    if (response.success) {
+      return response.dataUrl;
+    } else {
+      throw new Error(`Background fetch failed: ${response.error}`);
+    }
   }
-  return await response.blob();
 }
 
 // Convert Blob to Data URL Base64
@@ -923,16 +919,3 @@ setInterval(() => {
     // Ignore extension context invalidated errors silently
   }
 }, 10000);
-
-// Helper to convert base64 data URL to Blob for local download triggers
-function dataURLtoFileBlob(dataurl) {
-  const arr = dataurl.split(',');
-  const mime = arr[0].match(/:(.*?);/)[1];
-  const bstr = atob(arr[1]);
-  let n = bstr.length;
-  const u8arr = new Uint8Array(n);
-  while (n--) {
-    u8arr[n] = bstr.charCodeAt(n);
-  }
-  return new Blob([u8arr], { type: mime });
-}

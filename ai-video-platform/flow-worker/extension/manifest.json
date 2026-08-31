@@ -13,7 +13,11 @@
   ],
 
   "host_permissions": [
-    "<all_urls>"
+    "https://labs.google/fx/tools/flow*",
+    "http://diin-videoai.duckdns.org:8001/*",
+    "*://*.googleusercontent.com/*",
+    "*://*.googlevideo.com/*",
+    "*://*.google.com/*"
   ],
   "action": {
     "default_popup": "popup.html"

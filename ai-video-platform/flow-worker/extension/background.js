@@ -74,12 +74,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true; // keep channel open for async response
   }
 
-  // ── Fetch Asset request from content script (CORS bypass) ───────────────
-  if (message.type === 'FETCH_ASSET') {
+  // ── Network Fetch request from content script (bypasses CORS/CSP) ───────
+  if (message.type === 'FETCH_NETWORK_URL') {
     const { url } = message;
-    fetchAssetAsDataUrl(url)
-      .then(dataUrl => sendResponse({ ok: true, dataUrl }))
-      .catch(e => sendResponse({ ok: false, error: e.message }));
+    fetchNetworkUrlAsDataUrl(url)
+      .then(dataUrl => sendResponse({ success: true, dataUrl }))
+      .catch(e => sendResponse({ success: false, error: e.message }));
     return true; // keep channel open for async response
   }
 
@@ -93,27 +93,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 });
 
-// Helper to fetch any asset from background service worker to bypass CORS
-async function fetchAssetAsDataUrl(url) {
-  log(`Fetching asset from background to bypass CORS: ${url.substring(0, 100)}...`, 'info');
+// Helper to fetch network URL from background and convert to Data URL
+async function fetchNetworkUrlAsDataUrl(url) {
   const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`Failed to fetch from background: HTTP ${response.status}`);
-  }
-  const arrayBuffer = await response.arrayBuffer();
-  const contentType = response.headers.get('content-type') || 'application/octet-stream';
-  
-  // Chunk conversion to avoid stack overflow on huge video files
-  const bytes = new Uint8Array(arrayBuffer);
-  let binary = '';
-  const chunkSize = 8192;
-  for (let i = 0; i < bytes.length; i += chunkSize) {
-    const chunk = bytes.subarray(i, i + chunkSize);
-    binary += String.fromCharCode.apply(null, chunk);
-  }
-  
-  const base64 = btoa(binary);
-  return `data:${contentType};base64,${base64}`;
+  if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+  const blob = await response.blob();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Failed to read blob'));
+    reader.onloadend = () => resolve(reader.result);
+    reader.readAsDataURL(blob);
+  });
 }
 
 // ── CDP trusted click via chrome.debugger ────────────────────────────────────
