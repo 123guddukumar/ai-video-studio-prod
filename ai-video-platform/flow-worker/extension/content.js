@@ -552,31 +552,37 @@ async function executeAutomation(params) {
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     console.log(`Starting generation attempt ${attempt} of ${maxAttempts} with prompt: "${currentPrompt}"`);
     
-    // Clear prompt textbox if there's any pre-existing text
+    // Clear prompt textbox first
     promptInput.click();
     await sleep(200);
     promptInput.focus();
     
-    // Select and delete all text inside Slate editor
-    let clearRange = document.createRange();
-    let clearSel = window.getSelection();
-    clearRange.selectNodeContents(promptInput);
-    clearSel.removeAllRanges();
-    clearSel.addRange(clearRange);
+    // Select all and delete existing content
+    document.execCommand('selectAll', false, null);
     await sleep(100);
     document.execCommand('delete', false, null);
-    promptInput.textContent = "";
     await sleep(300);
 
-    // Type character-by-character letting browser handle cursor movements and React state updates natively
-    for (let i = 0; i < currentPrompt.length; i++) {
-      const char = currentPrompt[i];
-      document.execCommand('insertText', false, char);
-      await sleep(20 + Math.random() * 20); // 20-40ms human-like delay
-    }
+    // ── Paste the prompt using a native DataTransfer paste event ──────────────
+    // Slate.js properly handles paste events and updates its internal state.
+    // execCommand('insertText') only updates the DOM visually — Slate ignores it.
+    const dataTransfer = new DataTransfer();
+    dataTransfer.setData('text/plain', currentPrompt);
+    dataTransfer.setData('text', currentPrompt);
     
-    console.log('Prompt typed successfully using native input.');
-    await sleep(800);
+    const pasteEvent = new ClipboardEvent('paste', {
+      bubbles: true,
+      cancelable: true,
+      clipboardData: dataTransfer
+    });
+    
+    promptInput.dispatchEvent(pasteEvent);
+    await sleep(500); // Wait for Slate to process paste
+    
+    // Verify text was inserted (Slate should have updated its internal state)
+    const typedText = promptInput.textContent || "";
+    console.log(`Prompt pasted. Editor now contains: "${typedText.substring(0, 50)}..."`);
+    await sleep(500);
     
     // Submit prompt
     await sleep(1500); // Wait longer for Slate to register text and enable the submit button
