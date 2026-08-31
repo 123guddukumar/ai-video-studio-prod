@@ -224,11 +224,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 // Helper to dispatch simulated click/pointer/mouse events to guarantee Radix trigger opens
 function clickElement(el) {
   if (!el) return;
-  el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, pointerType: 'mouse' }));
-  el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
-  el.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true, pointerType: 'mouse' }));
-  el.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
-  el.click();
+  // Click deepest child to trigger natural event bubbling in React/Radix
+  let target = el;
+  const child = el.querySelector("i, span, div, svg");
+  if (child) {
+    target = child;
+  }
+  
+  target.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, pointerType: 'mouse' }));
+  target.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+  target.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true, pointerType: 'mouse' }));
+  target.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
+  target.click();
 }
 
 // Helper to strip safety trigger words and return a tweaked prompt
@@ -624,9 +631,7 @@ async function executeAutomation(params) {
       }
       
       if (targetBtn) {
-        const isAriaDisabled = targetBtn.getAttribute("aria-disabled") === "true";
-        const isDisabled = targetBtn.disabled || isAriaDisabled;
-        if (!isDisabled) {
+        if (!targetBtn.disabled) {
           btn = targetBtn;
           break;
         }
