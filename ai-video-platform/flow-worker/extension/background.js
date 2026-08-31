@@ -94,20 +94,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 
 // Helper to fetch network URL from background and convert to Data URL
-// Safe to run in Service Workers (doesn't use FileReader)
+// Safe to run in Service Workers (doesn't use FileReader) and handles large files via chunking
 async function fetchNetworkUrlAsDataUrl(url) {
   const response = await fetch(url);
   if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
   const blob = await response.blob();
   const buffer = await blob.arrayBuffer();
   
-  // Convert ArrayBuffer to base64 string safely
+  // Convert ArrayBuffer to base64 string safely using chunking to prevent stack overflow
   let binary = '';
   const bytes = new Uint8Array(buffer);
   const len = bytes.byteLength;
-  for (let i = 0; i < len; i++) {
-    binary += String.fromCharCode(bytes[i]);
+  const chunkSize = 8192; // process 8kb chunks
+  for (let i = 0; i < len; i += chunkSize) {
+    const chunk = bytes.subarray(i, i + chunkSize);
+    binary += String.fromCharCode.apply(null, chunk);
   }
+  
   const base64 = btoa(binary);
   const mime = blob.type || 'application/octet-stream';
   return `data:${mime};base64,${base64}`;

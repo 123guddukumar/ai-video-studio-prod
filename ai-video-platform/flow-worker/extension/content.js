@@ -864,19 +864,23 @@ async function fetchAssetAsDataUrl(url) {
     // Already a base64 data URL, return it directly!
     return url;
   }
-  if (url.startsWith('blob:')) {
+  
+  // Resolve relative URLs (like /fx/tools/flow/...) to absolute URLs using page origin
+  const absoluteUrl = new URL(url, document.baseURI).href;
+  
+  if (absoluteUrl.startsWith('blob:')) {
     // blob: URLs must be fetched in content script (same origin)
-    const res = await fetch(url);
+    const res = await fetch(absoluteUrl);
     if (!res.ok) throw new Error(`Failed to fetch blob URL: HTTP ${res.status}`);
     const blob = await res.blob();
     return await convertBlobToDataUrl(blob);
   } else {
     // Network URLs (http/https) are fetched in background.js to bypass CORS/CSP
-    console.log('[Content] Requesting background fetch for network URL:', url);
+    console.log('[Content] Requesting background fetch for network URL:', absoluteUrl);
     const response = await new Promise((resolve) => {
       chrome.runtime.sendMessage({
         type: 'FETCH_NETWORK_URL',
-        url: url
+        url: absoluteUrl
       }, (res) => {
         resolve(res || { success: false, error: 'No response from background' });
       });
