@@ -307,10 +307,10 @@ function findModeOption(mode) {
 
 // Helper to select Model (Nano/Fast) inside the open popover container
 function findModelOption(mode) {
-  // Prefer Imagen 3 (Nano) or Imagen 3 (Fast) for images, Veo 2 (Nano) / Veo (Nano) for videos
+  // Broaden to handle variations of Veo 2, Veo, Imagen 3, Nano, Fast, etc.
   const searchTerms = mode === 'generate_image' 
-    ? ['imagen 3 (nano)', 'imagen 3 (fast)', 'nano', 'fast']
-    : ['veo 2 (nano)', 'veo (nano)', 'nano', 'fast'];
+    ? ['imagen 3 (nano)', 'imagen 3 (fast)', 'imagen 3', 'imagen', 'nano', 'fast']
+    : ['veo 2 (nano)', 'veo 2 (fast)', 'veo 2', 'veo (nano)', 'veo (fast)', 'veo', 'nano', 'fast'];
 
   const containers = document.querySelectorAll("[role='dialog'], [role='menu'], [role='listbox'], .radix-popover-content, div[class*='popover'], div[class*='content']");
   for (let container of containers) {
@@ -475,14 +475,29 @@ async function executeAutomation(params) {
     console.log(`Found settings button: "${settingsBtn.textContent.trim()}". Clicking to open popover...`);
     clickElement(settingsBtn);
     await sleep(1200); // Wait for popover to open
+
+    const isPopoverOpen = () => {
+      return !!document.querySelector("[role='dialog'], [role='menu'], [role='listbox'], .radix-popover-content, div[class*='popover'], div[class*='content']");
+    };
+
+    const clickOptionAndKeepPopoverOpen = async (optionEl) => {
+      if (!optionEl) return;
+      clickElement(optionEl);
+      await sleep(1000);
+      // If popover closed after clicking, reopen it
+      if (!isPopoverOpen()) {
+        console.log("Popover closed after click. Reopening settings popover...");
+        clickElement(settingsBtn);
+        await sleep(1200);
+      }
+    };
     
     // 1. Select Mode (Image vs Video)
     console.log(`Selecting mode option for: ${action}`);
     const modeOpt = findModeOption(action);
     if (modeOpt) {
       console.log(`Found mode option in popover: "${modeOpt.textContent.trim()}". Clicking...`);
-      clickElement(modeOpt);
-      await sleep(1000);
+      await clickOptionAndKeepPopoverOpen(modeOpt);
     } else {
       console.warn('Mode option not found in popover.');
     }
@@ -492,8 +507,7 @@ async function executeAutomation(params) {
     const modelOpt = findModelOption(action);
     if (modelOpt) {
       console.log(`Found model option: "${modelOpt.textContent.trim()}". Clicking...`);
-      clickElement(modelOpt);
-      await sleep(1000);
+      await clickOptionAndKeepPopoverOpen(modelOpt);
     } else {
       console.warn('Model option not found in popover.');
     }
@@ -504,8 +518,7 @@ async function executeAutomation(params) {
       const ratioOpt = findRatioOption(aspect_ratio);
       if (ratioOpt) {
         console.log(`Found aspect ratio option: "${ratioOpt.textContent.trim()}". Clicking...`);
-        clickElement(ratioOpt);
-        await sleep(1000);
+        await clickOptionAndKeepPopoverOpen(ratioOpt);
       } else {
         console.warn('Aspect ratio option not found in popover.');
       }
@@ -518,17 +531,20 @@ async function executeAutomation(params) {
       const durationOpt = findDurationOption(targetDuration);
       if (durationOpt) {
         console.log(`Found duration option: "${durationOpt.textContent.trim()}". Clicking...`);
-        clickElement(durationOpt);
-        await sleep(1000);
+        await clickOptionAndKeepPopoverOpen(durationOpt);
       } else {
         console.warn('Duration option not found in popover.');
       }
     }
     
-    // Close settings popover by toggling the button closed
-    console.log('Closing settings popover...');
-    clickElement(settingsBtn);
-    await sleep(800);
+    // Close settings popover by toggling the button closed only if it is still open
+    if (isPopoverOpen()) {
+      console.log('Closing settings popover...');
+      clickElement(settingsBtn);
+      await sleep(800);
+    } else {
+      console.log('Settings popover already closed.');
+    }
   } else {
     console.warn('Could not locate settings trigger button on the page. Proceeding with defaults.');
   }
