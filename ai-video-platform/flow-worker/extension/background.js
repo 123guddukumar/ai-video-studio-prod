@@ -57,14 +57,25 @@ function setStatus(state) {
 // Message Listener from popup and content script
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'KEEP_ALIVE') {
-    // Keep-alive message from content script, do nothing. Just handling it wakes up/keeps worker alive.
     if (sendResponse) sendResponse({ status: 'ok' });
     return true;
   }
 
+  // ── Trusted CDP click request from content script ────────────────────────
+  // content.js sends button screen coordinates; we use chrome.debugger to fire
+  // a real Input.dispatchMouseEvent with isTrusted=true.
+  if (message.type === 'CLICK_SUBMIT_BUTTON') {
+    const tabId = sender.tab?.id;
+    if (!tabId) { sendResponse({ ok: false, error: 'No tab id' }); return true; }
+    const { x, y } = message;
+    cdpTrustedClick(tabId, x, y)
+      .then(() => sendResponse({ ok: true }))
+      .catch(e => sendResponse({ ok: false, error: e.message }));
+    return true; // keep channel open for async response
+  }
+
   if (message.action === 'connect') {
     serverUrl = message.serverUrl;
-    // Save URL to storage
     chrome.storage.local.set({ serverUrl }, () => {
       connectWebSocket();
     });
@@ -72,6 +83,31 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     disconnectWebSocket();
   }
 });
+
+// ── CDP trusted click via chrome.debugger ────────────────────────────────────
+// This is the ONLY way to dispatch isTrusted=true mouse events from an extension.
+async function cdpTrustedClick(tabId, x, y) {
+  const target = { tabId };
+  try {
+    await chrome.debugger.attach(target, '1.3');
+  } catch (e) {
+    // Already attached is OK
+    if (!e.message.includes('already attached')) throw e;
+  }
+  try {
+    await chrome.debugger.sendCommand(target, 'Input.dispatchMouseEvent', {
+      type: 'mousePressed', x, y, button: 'left', clickCount: 1,
+      buttons: 1, modifiers: 0, timestamp: Date.now() / 1000
+    });
+    await new Promise(r => setTimeout(r, 80));
+    await chrome.debugger.sendCommand(target, 'Input.dispatchMouseEvent', {
+      type: 'mouseReleased', x, y, button: 'left', clickCount: 1,
+      buttons: 0, modifiers: 0, timestamp: Date.now() / 1000
+    });
+  } finally {
+    try { await chrome.debugger.detach(target); } catch(e) {}
+  }
+}
 
 // Convert Server URL to WS URL
 function getWsUrl(url) {

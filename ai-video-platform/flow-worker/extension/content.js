@@ -558,10 +558,9 @@ async function executeAutomation(params) {
     promptInput.focus();
     await sleep(100);
 
-    // ── Send INSERT + SUBMIT to MAIN world injector.js via postMessage ────────
-    // injector.js (world: MAIN in manifest) accesses Slate fiber directly,
-    // inserts text, waits for React re-render, then clicks the enabled button.
-    const injectResult = await new Promise((resolve) => {
+    // ── Step 1: Insert text via MAIN world injector (Slate React fiber) ───────
+    // injector.js returns the submit button center coordinates when text is ready.
+    const injectorResponse = await new Promise((resolve) => {
       const resultHandler = (event) => {
         if (
           event.data &&
@@ -570,32 +569,44 @@ async function executeAutomation(params) {
         ) {
           window.removeEventListener('message', resultHandler);
           clearTimeout(fallbackTimer);
-          resolve(event.data.result);
+          resolve(event.data);
         }
       };
       window.addEventListener('message', resultHandler);
 
-      // Timeout: injector should respond within 8s (includes 4s poll for button)
       const fallbackTimer = setTimeout(() => {
         window.removeEventListener('message', resultHandler);
-        resolve('timeout');
+        resolve({ result: 'timeout', btnRect: null });
       }, 8000);
 
       window.postMessage({
         source: 'FLOW_EXTENSION_CONTENT',
-        type: 'SLATE_INSERT_AND_SUBMIT',
+        type: 'SLATE_INSERT_TEXT',
         text: currentPrompt
       }, '*');
     });
 
-    console.log('Injector result:', injectResult);
+    console.log('Injector response:', injectorResponse.result, 'btnRect:', injectorResponse.btnRect);
 
-    if (injectResult === 'success') {
-      console.log('Injector handled insert + submit successfully.');
-      await sleep(1000);
+    if (injectorResponse.result === 'ready-to-click' && injectorResponse.btnRect) {
+      // ── Step 2: CDP trusted click via background.js ─────────────────────────
+      // background.js uses chrome.debugger Input.dispatchMouseEvent — the only
+      // way to create isTrusted=true events that Google Flow React accepts.
+      const { x, y } = injectorResponse.btnRect;
+      console.log(`Requesting CDP trusted click at (${x}, ${y})...`);
+      const cdpResult = await new Promise((resolve) => {
+        chrome.runtime.sendMessage({
+          type: 'CLICK_SUBMIT_BUTTON',
+          x, y
+        }, (response) => {
+          resolve(response || { ok: false, error: 'no response' });
+        });
+      });
+      console.log('CDP click result:', cdpResult);
+      await sleep(1500);
     } else {
-      // ── Fallback: execCommand + direct click ──────────────────────────────
-      console.warn('Injector failed (' + injectResult + '). Using execCommand + click fallback.');
+      // ── Fallback: execCommand insert + direct click ───────────────────────
+      console.warn('Injector did not return coords (' + injectorResponse.result + '). Using execCommand fallback.');
       promptInput.focus();
       document.execCommand('selectAll', false, null);
       await sleep(50);
@@ -604,7 +615,7 @@ async function executeAutomation(params) {
       document.execCommand('insertText', false, currentPrompt);
       await sleep(1500);
 
-      // Find and click submit button
+      // Find and direct-click submit button (last resort)
       let submitBtn = null;
       for (const b of document.querySelectorAll('button')) {
         const iEl = b.querySelector('i');
