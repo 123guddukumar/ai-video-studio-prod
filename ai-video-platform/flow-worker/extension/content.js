@@ -552,105 +552,80 @@ async function executeAutomation(params) {
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     console.log(`Starting generation attempt ${attempt} of ${maxAttempts} with prompt: "${currentPrompt}"`);
     
-    // Clear prompt textbox first
+    // Focus the editor so injector can detect it
     promptInput.click();
     await sleep(200);
     promptInput.focus();
-    document.execCommand('selectAll', false, null);
     await sleep(100);
-    document.execCommand('delete', false, null);
-    await sleep(300);
 
-    // ── Inject text via postMessage to MAIN world injector.js ─────────────────
-    // CSP blocks inline <script> injection. Instead, we communicate with injector.js
-    // which runs in the PAGE's MAIN world (declared in manifest.json with "world":"MAIN").
-    // injector.js has full access to React fiber and Slate internals.
+    // ── Send INSERT + SUBMIT to MAIN world injector.js via postMessage ────────
+    // injector.js (world: MAIN in manifest) accesses Slate fiber directly,
+    // inserts text, waits for React re-render, then clicks the enabled button.
     const injectResult = await new Promise((resolve) => {
-      // Listen for response from MAIN world injector
       const resultHandler = (event) => {
-        if (event.data && event.data.source === 'FLOW_EXTENSION_INJECTOR' && event.data.type === 'SLATE_INSERT_RESULT') {
+        if (
+          event.data &&
+          event.data.source === 'FLOW_EXTENSION_INJECTOR' &&
+          event.data.type === 'SLATE_INSERT_RESULT'
+        ) {
           window.removeEventListener('message', resultHandler);
           clearTimeout(fallbackTimer);
           resolve(event.data.result);
         }
       };
       window.addEventListener('message', resultHandler);
-      
-      // Timeout fallback if injector doesn't respond within 3s
+
+      // Timeout: injector should respond within 8s (includes 4s poll for button)
       const fallbackTimer = setTimeout(() => {
         window.removeEventListener('message', resultHandler);
         resolve('timeout');
-      }, 3000);
-      
-      // Send request to MAIN world injector
+      }, 8000);
+
       window.postMessage({
         source: 'FLOW_EXTENSION_CONTENT',
-        type: 'SLATE_INSERT_TEXT',
+        type: 'SLATE_INSERT_AND_SUBMIT',
         text: currentPrompt
       }, '*');
     });
-    
-    console.log('Slate injection result via MAIN world injector:', injectResult);
-    
-    // If MAIN world injection failed or timed out, fall back to execCommand
-    if (injectResult !== 'success') {
-      console.warn('MAIN world injection failed, using execCommand fallback:', injectResult);
+
+    console.log('Injector result:', injectResult);
+
+    if (injectResult === 'success') {
+      console.log('Injector handled insert + submit successfully.');
+      await sleep(1000);
+    } else {
+      // ── Fallback: execCommand + direct click ──────────────────────────────
+      console.warn('Injector failed (' + injectResult + '). Using execCommand + click fallback.');
       promptInput.focus();
+      document.execCommand('selectAll', false, null);
+      await sleep(50);
+      document.execCommand('delete', false, null);
       await sleep(100);
       document.execCommand('insertText', false, currentPrompt);
-      await sleep(300);
-    }
-    
-    const typedText = promptInput.textContent || "";
-    console.log(`Editor content after injection: "${typedText.substring(0, 60)}"`);
-    await sleep(500);
-    
-    // Submit prompt
-    await sleep(1500); // Wait longer for Slate to register text and enable the submit button
-    
-    // Find the submit button — look for arrow_forward icon button
-    let submitBtn = null;
-    const allPageBtns = document.querySelectorAll("button");
-    for (let b of allPageBtns) {
-      // Match the arrow_forward icon button (not the + upload button)
-      const iTag = b.querySelector("i");
-      if (iTag && iTag.textContent.trim() === "arrow_forward") {
-        submitBtn = b;
-        break;
+      await sleep(1500);
+
+      // Find and click submit button
+      let submitBtn = null;
+      for (const b of document.querySelectorAll('button')) {
+        const iEl = b.querySelector('i');
+        if (iEl && iEl.textContent.trim() === 'arrow_forward') { submitBtn = b; break; }
       }
-    }
-    
-    if (!submitBtn) {
-      // Fallback: find button with Create text but not the + add button
-      for (let b of allPageBtns) {
-        const txt = b.textContent.trim();
-        const iTag = b.querySelector("i");
-        const iText = iTag?.textContent.trim() || "";
-        // + button has "add" icon, skip it
-        if (txt.includes("Create") && iText !== "add") {
-          submitBtn = b;
-          break;
+      if (!submitBtn) {
+        for (const b of document.querySelectorAll('button')) {
+          const iEl = b.querySelector('i');
+          if (b.textContent.includes('Create') && iEl?.textContent.trim() !== 'add') {
+            submitBtn = b; break;
+          }
         }
       }
-    }
-    
-    if (submitBtn) {
-      console.log(`Found submit button: "${submitBtn.textContent.trim()}". Removing disabled state and clicking...`);
-      // Forcefully remove the aria-disabled and disabled attributes so React allows the click
-      submitBtn.removeAttribute("aria-disabled");
-      submitBtn.removeAttribute("disabled");
-      submitBtn.disabled = false;
-      await sleep(100);
-      clickElement(submitBtn);
-      await sleep(1500);
-    } else {
-      console.warn('Could not locate submit button at all. Trying keyboard Enter fallback...');
-      // Last resort: press Enter on the textbox
-      promptInput.dispatchEvent(new KeyboardEvent('keydown', {
-        key: 'Enter', code: 'Enter', keyCode: 13, which: 13,
-        bubbles: true, cancelable: true
-      }));
-      await sleep(1500);
+      if (submitBtn) {
+        submitBtn.removeAttribute('aria-disabled');
+        submitBtn.removeAttribute('disabled');
+        submitBtn.disabled = false;
+        await sleep(100);
+        submitBtn.click();
+        await sleep(1000);
+      }
     }
     
     // Poll until element is present or safety error dialog appears
