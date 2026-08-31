@@ -226,9 +226,9 @@ function clickElement(el) {
   if (!el) return;
   el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, pointerType: 'mouse' }));
   el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
-  el.click();
   el.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true, pointerType: 'mouse' }));
   el.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
+  el.click();
 }
 
 // Helper to strip safety trigger words and return a tweaked prompt
@@ -605,27 +605,37 @@ async function executeAutomation(params) {
     
     // Find and click the ACTIVE enabled submit button (always query fresh DOM right before clicking)
     let submitBtn = null;
+    let btn = null;
     const startWait = Date.now();
     while (Date.now() - startWait < 3000) {
-      const allButtonsOnPage = document.querySelectorAll("button");
-      for (let btn of allButtonsOnPage) {
-        const text = btn.textContent.trim();
-        const html = btn.innerHTML || "";
-        
-        const hasArrow = text.includes("arrow_forward") || html.includes("arrow_forward");
-        const hasAddIcon = text.includes("add") || text.includes("plus") || html.includes("add") || html.includes("plus");
-        
-        if (hasArrow || (text.includes("Create") && !hasAddIcon)) {
-          const isAriaDisabled = btn.getAttribute("aria-disabled") === "true";
-          const isDisabled = btn.disabled || isAriaDisabled;
-          if (!isDisabled) {
-            submitBtn = btn;
+      // Use our standard selector to find the arrow_forward button
+      let targetBtn = findElement("button:has(i:has-text('arrow_forward'))");
+      if (!targetBtn) {
+        // Fallback search: look for text "Create" but make sure it does not contain the upload/add icon
+        const btns = document.querySelectorAll("button");
+        for (let b of btns) {
+          const txt = b.textContent.trim();
+          const hasAdd = b.querySelector("i")?.textContent.trim()?.includes("add") || b.innerHTML.includes("add") || b.innerHTML.includes("plus");
+          if (txt.includes("Create") && !hasAdd) {
+            targetBtn = b;
             break;
           }
         }
       }
-      if (submitBtn) break;
+      
+      if (targetBtn) {
+        const isAriaDisabled = targetBtn.getAttribute("aria-disabled") === "true";
+        const isDisabled = targetBtn.disabled || isAriaDisabled;
+        if (!isDisabled) {
+          btn = targetBtn;
+          break;
+        }
+      }
       await sleep(100);
+    }
+    
+    if (btn) {
+      submitBtn = btn;
     }
     
     if (submitBtn) {
