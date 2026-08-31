@@ -288,73 +288,89 @@ function checkGenerationError() {
   return null;
 }
 
-// Helper to select Mode (Image/Video) inside the open popover container
-function findModeOption(mode) {
+// Helper to select Mode (Image/Video) inside the open popover container (with retry/waiting)
+async function findModeOption(mode, timeoutMs = 3000) {
   const textToFind = mode === 'generate_image' ? 'Image' : 'Video';
-  const containers = document.querySelectorAll("[role='dialog'], [role='menu'], [role='listbox'], .radix-popover-content, div[class*='popover'], div[class*='content']");
-  for (let container of containers) {
-    const elements = container.querySelectorAll("*");
-    for (let el of elements) {
-      const text = el.textContent.trim().toLowerCase();
-      if (text === textToFind.toLowerCase()) {
-        return el;
+  const startTime = Date.now();
+  while (Date.now() - startTime < timeoutMs) {
+    const containers = document.querySelectorAll("[role='dialog'], [role='menu'], [role='listbox'], .radix-popover-content, div[class*='popover'], div[class*='content']");
+    for (let container of containers) {
+      const elements = container.querySelectorAll("button, div, span, [role='menuitem']");
+      for (let el of elements) {
+        const text = el.textContent.trim().toLowerCase();
+        if (text === textToFind.toLowerCase()) {
+          return el;
+        }
       }
     }
+    await sleep(150);
   }
   // Global search fallback
   return findElement(`button:has-text('${textToFind}'), [role='menuitem']:has-text('${textToFind}')`);
 }
 
-// Helper to select Model (Nano/Fast) inside the open popover container
-function findModelOption(mode) {
+// Helper to select Model (Nano/Fast) inside the open popover container (with retry/waiting)
+async function findModelOption(mode, timeoutMs = 3000) {
   // Broaden to handle variations of Veo 2, Veo, Imagen 3, Nano, Fast, etc.
   const searchTerms = mode === 'generate_image' 
     ? ['imagen 3 (nano)', 'imagen 3 (fast)', 'imagen 3', 'imagen', 'nano', 'fast']
     : ['veo 2 (nano)', 'veo 2 (fast)', 'veo 2', 'veo (nano)', 'veo (fast)', 'veo', 'nano', 'fast'];
 
-  const containers = document.querySelectorAll("[role='dialog'], [role='menu'], [role='listbox'], .radix-popover-content, div[class*='popover'], div[class*='content']");
-  for (let container of containers) {
-    const elements = container.querySelectorAll("*");
-    for (let el of elements) {
-      const text = el.textContent.trim().toLowerCase();
-      for (let term of searchTerms) {
-        if (text === term || text.includes(term)) {
-          return el;
+  const startTime = Date.now();
+  while (Date.now() - startTime < timeoutMs) {
+    const containers = document.querySelectorAll("[role='dialog'], [role='menu'], [role='listbox'], .radix-popover-content, div[class*='popover'], div[class*='content']");
+    for (let container of containers) {
+      const elements = container.querySelectorAll("button, div, span, [role='menuitem']");
+      for (let el of elements) {
+        const text = el.textContent.trim().toLowerCase();
+        for (let term of searchTerms) {
+          if (text === term || text.includes(term)) {
+            return el;
+          }
         }
       }
     }
+    await sleep(150);
   }
   return null;
 }
 
-// Helper to select Aspect Ratio inside the open popover container
-function findRatioOption(ratio) {
-  const containers = document.querySelectorAll("[role='dialog'], [role='menu'], [role='listbox'], .radix-popover-content, div[class*='popover'], div[class*='content']");
-  for (let container of containers) {
-    const elements = container.querySelectorAll("*");
-    for (let el of elements) {
-      const text = el.textContent.trim();
-      if (text === ratio) {
-        return el;
+// Helper to select Aspect Ratio inside the open popover container (with retry/waiting)
+async function findRatioOption(ratio, timeoutMs = 3000) {
+  const startTime = Date.now();
+  while (Date.now() - startTime < timeoutMs) {
+    const containers = document.querySelectorAll("[role='dialog'], [role='menu'], [role='listbox'], .radix-popover-content, div[class*='popover'], div[class*='content']");
+    for (let container of containers) {
+      const elements = container.querySelectorAll("button, div, span, [role='menuitem']");
+      for (let el of elements) {
+        const text = el.textContent.trim();
+        if (text === ratio) {
+          return el;
+        }
       }
     }
+    await sleep(150);
   }
   // Global search fallback
   return findElement(`button:has-text('${ratio}'), [role='menuitem']:has-text('${ratio}')`);
 }
 
-// Helper to select Video Duration inside the open popover container
-function findDurationOption(durationSeconds) {
+// Helper to select Video Duration inside the open popover container (with retry/waiting)
+async function findDurationOption(durationSeconds, timeoutMs = 3000) {
   const options = [`${durationSeconds}s`, `${durationSeconds} seconds`, `${durationSeconds} Sec`].map(t => t.toLowerCase());
-  const containers = document.querySelectorAll("[role='dialog'], [role='menu'], [role='listbox'], .radix-popover-content, div[class*='popover'], div[class*='content']");
-  for (let container of containers) {
-    const elements = container.querySelectorAll("*");
-    for (let el of elements) {
-      const text = el.textContent.trim().toLowerCase();
-      if (options.includes(text)) {
-        return el;
+  const startTime = Date.now();
+  while (Date.now() - startTime < timeoutMs) {
+    const containers = document.querySelectorAll("[role='dialog'], [role='menu'], [role='listbox'], .radix-popover-content, div[class*='popover'], div[class*='content']");
+    for (let container of containers) {
+      const elements = container.querySelectorAll("button, div, span, [role='menuitem']");
+      for (let el of elements) {
+        const text = el.textContent.trim().toLowerCase();
+        if (options.includes(text)) {
+          return el;
+        }
       }
     }
+    await sleep(150);
   }
   // Global search fallback
   for (let opt of options) {
@@ -494,7 +510,7 @@ async function executeAutomation(params) {
     
     // 1. Select Mode (Image vs Video)
     console.log(`Selecting mode option for: ${action}`);
-    const modeOpt = findModeOption(action);
+    const modeOpt = await findModeOption(action);
     if (modeOpt) {
       console.log(`Found mode option in popover: "${modeOpt.textContent.trim()}". Clicking...`);
       await clickOptionAndKeepPopoverOpen(modeOpt);
@@ -504,7 +520,7 @@ async function executeAutomation(params) {
 
     // 2. Select Model (Nano / Fast)
     console.log(`Selecting model for: ${action}`);
-    const modelOpt = findModelOption(action);
+    const modelOpt = await findModelOption(action);
     if (modelOpt) {
       console.log(`Found model option: "${modelOpt.textContent.trim()}". Clicking...`);
       await clickOptionAndKeepPopoverOpen(modelOpt);
@@ -515,7 +531,7 @@ async function executeAutomation(params) {
     // 3. Select Aspect Ratio
     if (aspect_ratio) {
       console.log(`Selecting aspect ratio: ${aspect_ratio}`);
-      const ratioOpt = findRatioOption(aspect_ratio);
+      const ratioOpt = await findRatioOption(aspect_ratio);
       if (ratioOpt) {
         console.log(`Found aspect ratio option: "${ratioOpt.textContent.trim()}". Clicking...`);
         await clickOptionAndKeepPopoverOpen(ratioOpt);
@@ -528,7 +544,7 @@ async function executeAutomation(params) {
     if (action === 'generate_video') {
       const targetDuration = duration || 6;
       console.log(`Selecting video duration: ${targetDuration}s`);
-      const durationOpt = findDurationOption(targetDuration);
+      const durationOpt = await findDurationOption(targetDuration);
       if (durationOpt) {
         console.log(`Found duration option: "${durationOpt.textContent.trim()}". Clicking...`);
         await clickOptionAndKeepPopoverOpen(durationOpt);
