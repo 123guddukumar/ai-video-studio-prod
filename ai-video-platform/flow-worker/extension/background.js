@@ -94,16 +94,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 
 // Helper to fetch network URL from background and convert to Data URL
+// Safe to run in Service Workers (doesn't use FileReader)
 async function fetchNetworkUrlAsDataUrl(url) {
   const response = await fetch(url);
   if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
   const blob = await response.blob();
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(new Error('Failed to read blob'));
-    reader.onloadend = () => resolve(reader.result);
-    reader.readAsDataURL(blob);
-  });
+  const buffer = await blob.arrayBuffer();
+  
+  // Convert ArrayBuffer to base64 string safely
+  let binary = '';
+  const bytes = new Uint8Array(buffer);
+  const len = bytes.byteLength;
+  for (let i = 0; i < len; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  const base64 = btoa(binary);
+  const mime = blob.type || 'application/octet-stream';
+  return `data:${mime};base64,${base64}`;
 }
 
 // ── CDP trusted click via chrome.debugger ────────────────────────────────────

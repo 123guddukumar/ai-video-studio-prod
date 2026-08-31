@@ -860,6 +860,10 @@ function extractVideoThumbnail(videoUrl) {
 
 // Fetch asset data URL with background script fallback to bypass CORS/CSP restrictions
 async function fetchAssetAsDataUrl(url) {
+  if (url.startsWith('data:')) {
+    // Already a base64 data URL, return it directly!
+    return url;
+  }
   if (url.startsWith('blob:')) {
     // blob: URLs must be fetched in content script (same origin)
     const res = await fetch(url);
