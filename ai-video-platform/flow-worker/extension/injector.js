@@ -71,6 +71,20 @@ async function handleInsertText(text) {
     }
     await sleep(150);
 
+    // Ensure Slate has a valid selection range to insert text (prevents silent failure when editor is unfocused)
+    if (!slateEditor.selection) {
+      try {
+        const startPoint = { path: [0, 0], offset: 0 };
+        slateEditor.selection = {
+          anchor: startPoint,
+          focus: startPoint
+        };
+        console.log('[Injector] Force-initialized Slate selection range.');
+      } catch (e) {
+        console.warn("[Injector] Failed to set manual selection:", e);
+      }
+    }
+
     // ── 4. Insert text via Slate's own insertText ─────────────────────────────
     slateEditor.insertText(text);
     await sleep(300);
