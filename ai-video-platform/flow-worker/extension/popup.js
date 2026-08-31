@@ -50,16 +50,17 @@ function updateUIStatus(state) {
 function renderLogs(logs) {
   logsConsole.innerHTML = '';
   logs.forEach(log => {
-    addLogToConsole(log.text, log.level);
+    addLogToConsole(log.text, log.level, log.timestamp);
   });
   logsConsole.scrollTop = logsConsole.scrollHeight;
 }
 
-function addLogToConsole(text, level = 'info') {
+function addLogToConsole(text, level = 'info', timestamp = null) {
   const entry = document.createElement('div');
   entry.className = `log-entry ${level}`;
   
-  const time = new Date().toLocaleTimeString();
+  const logTime = timestamp ? new Date(timestamp) : new Date();
+  const time = logTime.toLocaleTimeString();
   entry.textContent = `[${time}] ${text}`;
   
   logsConsole.appendChild(entry);

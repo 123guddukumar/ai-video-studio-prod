@@ -347,7 +347,8 @@ async function executeTask(task) {
       action: 'generate_video',
       prompt: task.video_prompt,
       duration: task.duration,
-      aspect_ratio: task.aspect_ratio
+      aspect_ratio: task.aspect_ratio,
+      imageUrl: task.image_url
     });
     
     const uploaded = await uploadAsset(task, 'video', result.dataUrl);
