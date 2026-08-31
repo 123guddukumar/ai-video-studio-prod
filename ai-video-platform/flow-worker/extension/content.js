@@ -561,36 +561,88 @@ async function executeAutomation(params) {
     document.execCommand('delete', false, null);
     await sleep(300);
 
-    // ── Inject text via React's internal fiber/nativeEvent setter ────────────
-    // Slate.js maintains its own internal state via React. We must update the
-    // React fiber's value setter directly — not just the DOM — to register text.
-    // Strategy 1: React nativeInputValueSetter on any inner input
-    // Strategy 2: Direct Slate paste event with DataTransfer
-    // Strategy 3: Simulate user typing using beforeinput only (Slate listens to this)
-    
-    // Strategy 3 is most reliable: Slate DOES listen to 'beforeinput' with insertText
-    // But we must NOT fire keydown/keyup as those interfere with Slate's composition
-    promptInput.focus();
-    await sleep(100);
-    
-    // Insert the whole prompt as one beforeinput event  
-    const insertEvent = new InputEvent('beforeinput', {
-      inputType: 'insertText',
-      data: currentPrompt,
-      bubbles: true,
-      cancelable: true
+    // ── Inject text into Slate via page MAIN world script tag ─────────────────
+    // Chrome extension content scripts run in an ISOLATED world. Synthetic events
+    // dispatched from isolated world have isTrusted=false and Slate may ignore them.
+    // Solution: inject a <script> tag that runs in the PAGE's main world — same as
+    // the page's own JavaScript — and use React fiber to call Slate's Transforms.
+    await new Promise((resolve) => {
+      const scriptId = 'slate-inject-' + Date.now();
+      const encodedPrompt = JSON.stringify(currentPrompt);
+      
+      const script = document.createElement('script');
+      script.id = scriptId;
+      script.textContent = `
+        (function() {
+          try {
+            const editor = document.querySelector("div[data-slate-editor='true']");
+            if (!editor) { window.__slateInjectDone = 'no-editor'; return; }
+            
+            // Find the React fiber on the editor element
+            const fiberKey = Object.keys(editor).find(k => k.startsWith('__reactFiber') || k.startsWith('__reactInternalInstance'));
+            if (!fiberKey) { window.__slateInjectDone = 'no-fiber'; return; }
+            
+            let fiber = editor[fiberKey];
+            // Walk up to find the Slate editor with transforms
+            let slateEditor = null;
+            let current = fiber;
+            for (let i = 0; i < 30 && current; i++) {
+              const props = current.memoizedProps || current.pendingProps;
+              if (props && props.editor && typeof props.editor.insertText === 'function') {
+                slateEditor = props.editor;
+                break;
+              }
+              current = current.return;
+            }
+            
+            if (slateEditor) {
+              // Select all existing content and delete it
+              const { Transforms, Editor } = window.Slate || {};
+              if (Transforms) {
+                Transforms.select(slateEditor, Editor.start(slateEditor, []));
+                Transforms.delete(slateEditor, { at: { anchor: Editor.start(slateEditor, []), focus: Editor.end(slateEditor, []) }});
+                Transforms.insertText(slateEditor, ${encodedPrompt});
+              } else {
+                // Fallback: call editor methods directly
+                slateEditor.deleteBackward('sentence');
+                slateEditor.insertText(${encodedPrompt});
+              }
+              window.__slateInjectDone = 'success';
+            } else {
+              window.__slateInjectDone = 'no-slate-editor';
+            }
+          } catch(e) {
+            window.__slateInjectDone = 'error:' + e.message;
+          }
+        })();
+      `;
+      document.head.appendChild(script);
+      script.remove();
+      
+      // Wait a moment then check result
+      setTimeout(() => resolve(), 800);
     });
-    promptInput.dispatchEvent(insertEvent);
-    await sleep(500);
     
-    // Also try execCommand as secondary fallback (some Slate versions handle it)
-    if (!promptInput.textContent || promptInput.textContent.trim() === '') {
+    const injectResult = await new Promise(r => {
+      const script2 = document.createElement('script');
+      script2.textContent = 'window.__slateInjectResult = window.__slateInjectDone || "not-set";';
+      document.head.appendChild(script2);
+      script2.remove();
+      setTimeout(() => r(window.__slateInjectDone || 'unknown'), 100);
+    });
+    console.log('Slate injection result:', injectResult);
+    
+    // If fiber injection failed, fall back to execCommand (fires trusted beforeinput)
+    if (!injectResult || injectResult !== 'success') {
+      console.warn('Fiber injection failed, using execCommand fallback:', injectResult);
+      promptInput.focus();
+      await sleep(100);
       document.execCommand('insertText', false, currentPrompt);
       await sleep(300);
     }
     
     const typedText = promptInput.textContent || "";
-    console.log(`Prompt inserted. Editor contains: "${typedText.substring(0, 60)}"`);
+    console.log(`Editor content after injection: "${typedText.substring(0, 60)}"`);
     await sleep(500);
     
     // Submit prompt
