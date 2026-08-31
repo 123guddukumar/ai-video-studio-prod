@@ -579,60 +579,51 @@ async function executeAutomation(params) {
     await sleep(800);
     
     // Submit prompt
-    await sleep(600); // Wait for editor state to sync
+    await sleep(1500); // Wait longer for Slate to register text and enable the submit button
     
-    // Find and click the ACTIVE enabled submit button (always query fresh DOM right before clicking)
+    // Find the submit button — look for arrow_forward icon button
     let submitBtn = null;
-    let btn = null;
-    const startWait = Date.now();
-    while (Date.now() - startWait < 3000) {
-      // Use our standard selector to find the arrow_forward button
-      let targetBtn = findElement("button:has(i:has-text('arrow_forward'))");
-      if (!targetBtn) {
-        // Fallback search: look for text "Create" but make sure it does not contain the upload/add icon
-        const btns = document.querySelectorAll("button");
-        for (let b of btns) {
-          const txt = b.textContent.trim();
-          const hasAdd = b.querySelector("i")?.textContent.trim()?.includes("add") || b.innerHTML.includes("add") || b.innerHTML.includes("plus");
-          if (txt.includes("Create") && !hasAdd) {
-            targetBtn = b;
-            break;
-          }
-        }
-      }
-      
-      if (targetBtn) {
-        btn = targetBtn;
+    const allPageBtns = document.querySelectorAll("button");
+    for (let b of allPageBtns) {
+      // Match the arrow_forward icon button (not the + upload button)
+      const iTag = b.querySelector("i");
+      if (iTag && iTag.textContent.trim() === "arrow_forward") {
+        submitBtn = b;
         break;
       }
-      await sleep(100);
     }
     
-    if (btn) {
-      submitBtn = btn;
-    }
-    
-    if (submitBtn) {
-      console.log(`Found active enabled submit button. Clicking it to trigger generation...`);
-      clickElement(submitBtn);
-      await sleep(1500);
-    } else {
-      console.warn('Could not locate an enabled submit button. Fallback clicking any matching button...');
-      // Fallback: Click any matching button even if disabled/loading state is showing
-      const allButtonsOnPage = document.querySelectorAll("button");
-      for (let btn of allButtonsOnPage) {
-        const text = btn.textContent.trim();
-        const html = btn.innerHTML || "";
-        
-        const hasArrow = text.includes("arrow_forward") || html.includes("arrow_forward");
-        const hasAddIcon = text.includes("add") || text.includes("plus") || html.includes("add") || html.includes("plus");
-        
-        if (hasArrow || (text.includes("Create") && !hasAddIcon)) {
-          clickElement(btn);
-          await sleep(1500);
+    if (!submitBtn) {
+      // Fallback: find button with Create text but not the + add button
+      for (let b of allPageBtns) {
+        const txt = b.textContent.trim();
+        const iTag = b.querySelector("i");
+        const iText = iTag?.textContent.trim() || "";
+        // + button has "add" icon, skip it
+        if (txt.includes("Create") && iText !== "add") {
+          submitBtn = b;
           break;
         }
       }
+    }
+    
+    if (submitBtn) {
+      console.log(`Found submit button: "${submitBtn.textContent.trim()}". Removing disabled state and clicking...`);
+      // Forcefully remove the aria-disabled and disabled attributes so React allows the click
+      submitBtn.removeAttribute("aria-disabled");
+      submitBtn.removeAttribute("disabled");
+      submitBtn.disabled = false;
+      await sleep(100);
+      clickElement(submitBtn);
+      await sleep(1500);
+    } else {
+      console.warn('Could not locate submit button at all. Trying keyboard Enter fallback...');
+      // Last resort: press Enter on the textbox
+      promptInput.dispatchEvent(new KeyboardEvent('keydown', {
+        key: 'Enter', code: 'Enter', keyCode: 13, which: 13,
+        bubbles: true, cancelable: true
+      }));
+      await sleep(1500);
     }
     
     // Poll until element is present or safety error dialog appears
