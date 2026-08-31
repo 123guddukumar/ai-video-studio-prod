@@ -626,16 +626,44 @@ async function executeAutomation(params) {
       // way to create isTrusted=true events that Google Flow React accepts.
       const { x, y } = injectorResponse.btnRect;
       console.log(`Requesting CDP trusted click at (${x}, ${y})...`);
-      const cdpResult = await new Promise((resolve) => {
-        chrome.runtime.sendMessage({
-          type: 'CLICK_SUBMIT_BUTTON',
-          x, y
-        }, (response) => {
-          resolve(response || { ok: false, error: 'no response' });
+      
+      let cdpResult = { ok: false, error: 'unknown' };
+      try {
+        cdpResult = await new Promise((resolve, reject) => {
+          try {
+            chrome.runtime.sendMessage({
+              type: 'CLICK_SUBMIT_BUTTON',
+              x, y
+            }, (response) => {
+              const err = chrome.runtime.lastError;
+              if (err) {
+                reject(err);
+              } else {
+                resolve(response || { ok: false, error: 'no response' });
+              }
+            });
+          } catch (sendErr) {
+            reject(sendErr);
+          }
         });
-      });
-      console.log('CDP click result:', cdpResult);
-      await sleep(1500);
+        console.log('CDP click result:', cdpResult);
+        await sleep(1500);
+      } catch (clickErr) {
+        console.warn('[Content] CDP click failed due to context invalidation/error:', clickErr.message);
+        console.log('Attempting immediate direct click fallback...');
+        let submitBtn = null;
+        for (const b of document.querySelectorAll('button')) {
+          const iEl = b.querySelector('i');
+          if (iEl && iEl.textContent.trim() === 'arrow_forward') { submitBtn = b; break; }
+        }
+        if (submitBtn) {
+          submitBtn.removeAttribute('aria-disabled');
+          submitBtn.removeAttribute('disabled');
+          submitBtn.disabled = false;
+          submitBtn.click();
+          await sleep(1000);
+        }
+      }
 
       // Self-healing check: if the editor textbox still has text, the submit event did not trigger.
       // Fallback by direct-clicking the HTML submit button.
