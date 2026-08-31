@@ -74,6 +74,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true; // keep channel open for async response
   }
 
+  // ── Fetch Asset request from content script (CORS bypass) ───────────────
+  if (message.type === 'FETCH_ASSET') {
+    const { url } = message;
+    fetchAssetAsDataUrl(url)
+      .then(dataUrl => sendResponse({ ok: true, dataUrl }))
+      .catch(e => sendResponse({ ok: false, error: e.message }));
+    return true; // keep channel open for async response
+  }
+
   if (message.action === 'connect') {
     serverUrl = message.serverUrl;
     chrome.storage.local.set({ serverUrl }, () => {
@@ -83,6 +92,29 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     disconnectWebSocket();
   }
 });
+
+// Helper to fetch any asset from background service worker to bypass CORS
+async function fetchAssetAsDataUrl(url) {
+  log(`Fetching asset from background to bypass CORS: ${url.substring(0, 100)}...`, 'info');
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch from background: HTTP ${response.status}`);
+  }
+  const arrayBuffer = await response.arrayBuffer();
+  const contentType = response.headers.get('content-type') || 'application/octet-stream';
+  
+  // Chunk conversion to avoid stack overflow on huge video files
+  const bytes = new Uint8Array(arrayBuffer);
+  let binary = '';
+  const chunkSize = 8192;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const chunk = bytes.subarray(i, i + chunkSize);
+    binary += String.fromCharCode.apply(null, chunk);
+  }
+  
+  const base64 = btoa(binary);
+  return `data:${contentType};base64,${base64}`;
+}
 
 // ── CDP trusted click via chrome.debugger ────────────────────────────────────
 // This is the ONLY way to dispatch isTrusted=true mouse events from an extension.

@@ -784,8 +784,33 @@ async function executeAutomation(params) {
   
   // ── Step 6: Fetch file data & convert to base64 ────────────────────────────
   console.log('Fetching asset data from URL:', assetUrl);
-  const fileBlob = await fetchAssetBlob(assetUrl);
-  const dataUrl = await convertBlobToDataUrl(fileBlob);
+  let dataUrl = null;
+  let fileBlob = null;
+  
+  if (assetUrl.startsWith('blob:')) {
+    // Local blob URLs can only be fetched from the page context
+    fileBlob = await fetchAssetBlob(assetUrl);
+    dataUrl = await convertBlobToDataUrl(fileBlob);
+  } else {
+    // Remote URLs (https://...) are fetched from background script to bypass CORS
+    console.log('Remote asset URL detected. Routing fetch to background script to bypass CORS...');
+    const fetchResponse = await new Promise((resolve) => {
+      chrome.runtime.sendMessage({
+        type: 'FETCH_ASSET',
+        url: assetUrl
+      }, (response) => {
+        resolve(response || { ok: false, error: 'No response from background' });
+      });
+    });
+    
+    if (fetchResponse.ok && fetchResponse.dataUrl) {
+      dataUrl = fetchResponse.dataUrl;
+      // Convert the fetched base64 back to Blob so local download still works
+      fileBlob = dataURLtoFileBlob(dataUrl);
+    } else {
+      throw new Error(`Failed to fetch remote asset data: ${fetchResponse.error || 'unknown error'}`);
+    }
+  }
   
   // Trigger local browser download safely using same-origin Blob URL to prevent page navigation
   try {
@@ -898,3 +923,16 @@ setInterval(() => {
     // Ignore extension context invalidated errors silently
   }
 }, 10000);
+
+// Helper to convert base64 data URL to Blob for local download triggers
+function dataURLtoFileBlob(dataurl) {
+  const arr = dataurl.split(',');
+  const mime = arr[0].match(/:(.*?);/)[1];
+  const bstr = atob(arr[1]);
+  let n = bstr.length;
+  const u8arr = new Uint8Array(n);
+  while (n--) {
+    u8arr[n] = bstr.charCodeAt(n);
+  }
+  return new Blob([u8arr], { type: mime });
+}
