@@ -561,80 +561,40 @@ async function executeAutomation(params) {
     document.execCommand('delete', false, null);
     await sleep(300);
 
-    // ── Inject text into Slate via page MAIN world script tag ─────────────────
-    // Chrome extension content scripts run in an ISOLATED world. Synthetic events
-    // dispatched from isolated world have isTrusted=false and Slate may ignore them.
-    // Solution: inject a <script> tag that runs in the PAGE's main world — same as
-    // the page's own JavaScript — and use React fiber to call Slate's Transforms.
-    await new Promise((resolve) => {
-      const scriptId = 'slate-inject-' + Date.now();
-      const encodedPrompt = JSON.stringify(currentPrompt);
+    // ── Inject text via postMessage to MAIN world injector.js ─────────────────
+    // CSP blocks inline <script> injection. Instead, we communicate with injector.js
+    // which runs in the PAGE's MAIN world (declared in manifest.json with "world":"MAIN").
+    // injector.js has full access to React fiber and Slate internals.
+    const injectResult = await new Promise((resolve) => {
+      // Listen for response from MAIN world injector
+      const resultHandler = (event) => {
+        if (event.data && event.data.source === 'FLOW_EXTENSION_INJECTOR' && event.data.type === 'SLATE_INSERT_RESULT') {
+          window.removeEventListener('message', resultHandler);
+          clearTimeout(fallbackTimer);
+          resolve(event.data.result);
+        }
+      };
+      window.addEventListener('message', resultHandler);
       
-      const script = document.createElement('script');
-      script.id = scriptId;
-      script.textContent = `
-        (function() {
-          try {
-            const editor = document.querySelector("div[data-slate-editor='true']");
-            if (!editor) { window.__slateInjectDone = 'no-editor'; return; }
-            
-            // Find the React fiber on the editor element
-            const fiberKey = Object.keys(editor).find(k => k.startsWith('__reactFiber') || k.startsWith('__reactInternalInstance'));
-            if (!fiberKey) { window.__slateInjectDone = 'no-fiber'; return; }
-            
-            let fiber = editor[fiberKey];
-            // Walk up to find the Slate editor with transforms
-            let slateEditor = null;
-            let current = fiber;
-            for (let i = 0; i < 30 && current; i++) {
-              const props = current.memoizedProps || current.pendingProps;
-              if (props && props.editor && typeof props.editor.insertText === 'function') {
-                slateEditor = props.editor;
-                break;
-              }
-              current = current.return;
-            }
-            
-            if (slateEditor) {
-              // Select all existing content and delete it
-              const { Transforms, Editor } = window.Slate || {};
-              if (Transforms) {
-                Transforms.select(slateEditor, Editor.start(slateEditor, []));
-                Transforms.delete(slateEditor, { at: { anchor: Editor.start(slateEditor, []), focus: Editor.end(slateEditor, []) }});
-                Transforms.insertText(slateEditor, ${encodedPrompt});
-              } else {
-                // Fallback: call editor methods directly
-                slateEditor.deleteBackward('sentence');
-                slateEditor.insertText(${encodedPrompt});
-              }
-              window.__slateInjectDone = 'success';
-            } else {
-              window.__slateInjectDone = 'no-slate-editor';
-            }
-          } catch(e) {
-            window.__slateInjectDone = 'error:' + e.message;
-          }
-        })();
-      `;
-      document.head.appendChild(script);
-      script.remove();
+      // Timeout fallback if injector doesn't respond within 3s
+      const fallbackTimer = setTimeout(() => {
+        window.removeEventListener('message', resultHandler);
+        resolve('timeout');
+      }, 3000);
       
-      // Wait a moment then check result
-      setTimeout(() => resolve(), 800);
+      // Send request to MAIN world injector
+      window.postMessage({
+        source: 'FLOW_EXTENSION_CONTENT',
+        type: 'SLATE_INSERT_TEXT',
+        text: currentPrompt
+      }, '*');
     });
     
-    const injectResult = await new Promise(r => {
-      const script2 = document.createElement('script');
-      script2.textContent = 'window.__slateInjectResult = window.__slateInjectDone || "not-set";';
-      document.head.appendChild(script2);
-      script2.remove();
-      setTimeout(() => r(window.__slateInjectDone || 'unknown'), 100);
-    });
-    console.log('Slate injection result:', injectResult);
+    console.log('Slate injection result via MAIN world injector:', injectResult);
     
-    // If fiber injection failed, fall back to execCommand (fires trusted beforeinput)
-    if (!injectResult || injectResult !== 'success') {
-      console.warn('Fiber injection failed, using execCommand fallback:', injectResult);
+    // If MAIN world injection failed or timed out, fall back to execCommand
+    if (injectResult !== 'success') {
+      console.warn('MAIN world injection failed, using execCommand fallback:', injectResult);
       promptInput.focus();
       await sleep(100);
       document.execCommand('insertText', false, currentPrompt);

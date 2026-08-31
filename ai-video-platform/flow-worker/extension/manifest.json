@@ -27,6 +27,15 @@
         "https://labs.google/fx/tools/flow*",
         "https://labs.google/fx/tools/flow/*"
       ],
+      "js": ["injector.js"],
+      "run_at": "document_idle",
+      "world": "MAIN"
+    },
+    {
+      "matches": [
+        "https://labs.google/fx/tools/flow*",
+        "https://labs.google/fx/tools/flow/*"
+      ],
       "js": ["content.js"],
       "run_at": "document_end"
     }
