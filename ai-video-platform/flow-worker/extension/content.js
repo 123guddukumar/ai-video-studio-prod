@@ -604,7 +604,15 @@ async function executeAutomation(params) {
       await sleep(15 + Math.random() * 20); // 15-35ms human-like delay
     }
     
-    console.log('Prompt typed successfully.');
+    // Dispatch a final input event representing the full typed text to force React/Slate state to sync
+    promptInput.dispatchEvent(new InputEvent('input', {
+      bubbles: true,
+      cancelable: true,
+      inputType: 'insertText',
+      data: currentPrompt
+    }));
+    
+    console.log('Prompt typed successfully and React/Slate inputs synchronized.');
     await sleep(800);
     
     // Submit prompt
@@ -631,10 +639,8 @@ async function executeAutomation(params) {
       }
       
       if (targetBtn) {
-        if (!targetBtn.disabled) {
-          btn = targetBtn;
-          break;
-        }
+        btn = targetBtn;
+        break;
       }
       await sleep(100);
     }
