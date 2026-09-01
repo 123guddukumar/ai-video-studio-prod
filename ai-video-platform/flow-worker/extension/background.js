@@ -127,6 +127,7 @@ async function cdpTrustedClick(tabId, x, y) {
     if (!e.message.includes('already attached')) throw e;
   }
   try {
+    // Dispatch trusted mouse press & release
     await chrome.debugger.sendCommand(target, 'Input.dispatchMouseEvent', {
       type: 'mousePressed', x, y, button: 'left', clickCount: 1,
       buttons: 1, modifiers: 0, timestamp: Date.now() / 1000
@@ -135,6 +136,30 @@ async function cdpTrustedClick(tabId, x, y) {
     await chrome.debugger.sendCommand(target, 'Input.dispatchMouseEvent', {
       type: 'mouseReleased', x, y, button: 'left', clickCount: 1,
       buttons: 0, modifiers: 0, timestamp: Date.now() / 1000
+    });
+    
+    // Also dispatch trusted Enter key event (universal submit trigger in Google Flow)
+    await new Promise(r => setTimeout(r, 100));
+    await chrome.debugger.sendCommand(target, 'Input.dispatchKeyEvent', {
+      type: 'rawKeyDown',
+      windowsVirtualKeyCode: 13,
+      nativeVirtualKeyCode: 13,
+      macCharCode: 13,
+      unmodifiedText: '\r',
+      text: '\r',
+      key: 'Enter',
+      code: 'Enter'
+    });
+    await new Promise(r => setTimeout(r, 50));
+    await chrome.debugger.sendCommand(target, 'Input.dispatchKeyEvent', {
+      type: 'keyUp',
+      windowsVirtualKeyCode: 13,
+      nativeVirtualKeyCode: 13,
+      macCharCode: 13,
+      unmodifiedText: '\r',
+      text: '\r',
+      key: 'Enter',
+      code: 'Enter'
     });
   } finally {
     try { await chrome.debugger.detach(target); } catch(e) {}

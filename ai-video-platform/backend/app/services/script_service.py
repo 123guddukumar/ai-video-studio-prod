@@ -42,6 +42,8 @@ RULES:
 - Scene numbers must be sequential starting at 1.
 - MULTI-LANGUAGE RULE: If the target language is NOT English, write ONLY the `narration` (voiceover) and the `title` in that language. All other JSON fields (image_prompt, video_prompt, visual_description, visual_style, color_style, camera_style, environment_style) MUST be in English. This is required because image generation models only understand English prompts, and it prevents token count overflow.
 - REAL ESTATE & PREMIUM BUSINESS RULE: If the project topic is about real estate, property sales, or premium/corporate business, you MUST generate highly realistic, photorealistic, luxury-focused, and premium prompts. Avoid terms like "illustration", "cartoon", "3D render", "unreal engine". Instead, use descriptors like "photorealistic", "ultra-high-end modern architectural photography", "soft morning volumetric lighting", "immaculately styled luxury interior design", "sleek, modern, and realistic drone shots", "high-end real estate presentation", "professional cinematography with shallow depth of field". Ensure the subject is portrayed in a premium, elegant, and realistic light.
+- IMAGE-TO-VIDEO MOTION RULE: The `video_prompt` is used specifically to animate the generated scene image into video. Therefore, `video_prompt` MUST focus on camera movement, lighting changes, and subtle natural motion (e.g. 'Smooth cinematic slow push-in, subtle natural breeze, soft morning light shift, 4k ultra-realistic motion'). NEVER write a `video_prompt` that describes a completely different scene or contradicts the `image_prompt`.
+- STRICT ZERO-TOLERANCE MINOR / SAFETY RULE: AI video models strictly block any content featuring children, kids, schoolboys, schoolgirls, minors, toddlers, or babies (triggers safety filter 'harmful content related to minors' or 'uploads of minors'). You MUST NEVER use words like 'child', 'children', 'kid', 'kids', 'boy', 'boys', 'girl', 'girls', 'minor', 'minors', 'toddler', 'baby', 'teenager', 'schoolboy', 'schoolbag', 'playground'. If the user's input mentions children or school, adapt the visual prompts to depict modern luxury homes, adult residents, young couples, beautiful gardens, walking tracks, smart access gates, or architectural spaces!
 """
 
 def _build_user_prompt(
@@ -180,7 +182,24 @@ def _extract_json(text: str) -> dict:
         except json.JSONDecodeError:
             pass
 
-    raise ValueError(f"Could not extract valid JSON from response: {text[:200]}")
+def _sanitize_prompt_text(text: str) -> str:
+    """Sanitize prompt to remove any minor/safety filter trigger words."""
+    if not text:
+        return text
+
+    replacements = [
+        (r"\b(kids?|children|child|minors?|toddlers?|babies|baby|infants?|teenagers?|schoolboys?|schoolgirls?)\b", "residents"),
+        (r"\bschool\s*bag\b", "briefcase"),
+        (r"\bplay\s*area\b", "landscaped park"),
+        (r"\bplayground\b", "community garden"),
+        (r"\byoung\s*parents\b", "young homeowners"),
+        (r"\bplaying\b", "walking"),
+        (r"\bplay\s+safely\b", "enjoy outdoors"),
+    ]
+    sanitized = text
+    for pattern, repl in replacements:
+        sanitized = re.sub(pattern, repl, sanitized, flags=re.IGNORECASE)
+    return sanitized.strip()
 
 
 class ScriptService:
@@ -237,6 +256,13 @@ class ScriptService:
 
                 script_data = _extract_json(raw_response)
                 script = ScriptSchema.model_validate(script_data)
+
+                # Post-process & sanitize all scene prompts for safety compliance
+                for scene in script.scenes:
+                    scene.image_prompt = _sanitize_prompt_text(scene.image_prompt)
+                    scene.video_prompt = _sanitize_prompt_text(scene.video_prompt)
+                    if scene.visual_description:
+                        scene.visual_description = _sanitize_prompt_text(scene.visual_description)
 
                 logger.info(
                     "script_generation_completed",

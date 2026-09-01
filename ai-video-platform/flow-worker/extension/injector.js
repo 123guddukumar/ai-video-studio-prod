@@ -23,127 +23,108 @@ async function sleep(ms) {
 
 async function handleInsertText(text) {
   try {
-    // ── 1. Find the Slate editor element ──────────────────────────────────────
-    const editorEl = document.querySelector("div[data-slate-editor='true']");
+    // ── 1. Find the editor element with polling ──────────────────────────────
+    let editorEl = null;
+    for (let i = 0; i < 30; i++) {
+      editorEl = document.querySelector("div[data-slate-editor='true'], div[role='textbox'], div[contenteditable='true']");
+      if (editorEl) break;
+      await sleep(100);
+    }
     if (!editorEl) return { status: 'no-editor' };
 
     // ── 2. Find the Slate editor object via React fiber ───────────────────────
     const fiberKey = Object.keys(editorEl).find(k =>
-      k.startsWith('__reactFiber') || k.startsWith('__reactInternalInstance')
+      k.startsWith('__reactFiber') || k.startsWith('__reactInternalInstance') || k.startsWith('__reactProps')
     );
-    if (!fiberKey) return { status: 'no-fiber' };
 
     let slateEditor = null;
-    let current = editorEl[fiberKey];
-    for (let i = 0; i < 60 && current; i++) {
-      const props = current.memoizedProps || current.pendingProps;
-      if (props && props.editor && typeof props.editor.insertText === 'function') {
-        slateEditor = props.editor;
-        break;
+    if (fiberKey) {
+      let current = editorEl[fiberKey];
+      for (let i = 0; i < 60 && current; i++) {
+        const props = current.memoizedProps || current.pendingProps;
+        if (props && props.editor && typeof props.editor.insertText === 'function') {
+          slateEditor = props.editor;
+          break;
+        }
+        current = current.return;
       }
-      current = current.return;
     }
-    if (!slateEditor) return { status: 'no-slate-editor' };
 
     // ── 3. Focus editor and clear existing content ────────────────────────────
     editorEl.focus();
     await sleep(100);
 
-    // Select all and delete in a single operation to prevent Slate desync
-    try {
-      if (slateEditor.selectAll) {
-        slateEditor.selectAll();
-      } else {
-        const range = document.createRange();
-        range.selectNodeContents(editorEl);
-        const sel = window.getSelection();
-        sel.removeAllRanges();
-        sel.addRange(range);
+    if (slateEditor) {
+      try {
+        if (slateEditor.selectAll) {
+          slateEditor.selectAll();
+        } else {
+          const range = document.createRange();
+          range.selectNodeContents(editorEl);
+          const sel = window.getSelection();
+          sel.removeAllRanges();
+          sel.addRange(range);
+        }
+        await sleep(100);
+        if (slateEditor.deleteFragment) {
+          slateEditor.deleteFragment();
+        } else {
+          document.execCommand('delete', false, null);
+        }
+      } catch (e) {
+        console.warn("[Injector] Clear error:", e);
       }
       await sleep(100);
-      if (slateEditor.deleteFragment) {
-        slateEditor.deleteFragment();
-      } else {
-        document.execCommand('delete', false, null);
-      }
-    } catch(e) {
-      console.warn("[Injector] Clear error:", e);
-    }
-    await sleep(150);
 
-    // Ensure Slate has a valid selection range to insert text (prevents silent failure when editor is unfocused)
-    if (!slateEditor.selection) {
-      try {
-        const startPoint = { path: [0, 0], offset: 0 };
-        slateEditor.selection = {
-          anchor: startPoint,
-          focus: startPoint
-        };
-        console.log('[Injector] Force-initialized Slate selection range.');
-      } catch (e) {
-        console.warn("[Injector] Failed to set manual selection:", e);
+      if (!slateEditor.selection) {
+        try {
+          const startPoint = { path: [0, 0], offset: 0 };
+          slateEditor.selection = { anchor: startPoint, focus: startPoint };
+        } catch (e) {}
       }
+
+      slateEditor.insertText(text);
+    } else {
+      // Direct DOM fallback
+      editorEl.focus();
+      document.execCommand('selectAll', false, null);
+      await sleep(50);
+      document.execCommand('delete', false, null);
+      await sleep(50);
+      document.execCommand('insertText', false, text);
     }
 
-    // ── 4. Insert text via Slate's own insertText ─────────────────────────────
-    slateEditor.insertText(text);
+    // Dispatch synthetic input events to sync React state
+    try {
+      editorEl.dispatchEvent(new InputEvent('beforeinput', { bubbles: true, cancelable: true, data: text, inputType: 'insertText' }));
+      editorEl.dispatchEvent(new InputEvent('input', { bubbles: true, cancelable: true, data: text, inputType: 'insertText' }));
+      editorEl.dispatchEvent(new Event('change', { bubbles: true }));
+    } catch (e) {}
+
     await sleep(300);
 
-    const editorText = editorEl.textContent || '';
-    console.log('[Injector] Text in editor after insertText:', editorText.substring(0, 80));
-
-    if (!editorText.trim()) {
-      return { status: 'insert-failed-empty' };
-    }
-
-    // ── 5. Wait for React to re-render and enable the submit button ───────────
-    // Poll up to 5 seconds for the arrow_forward button to become active
+    // ── 4. Find submit button & force-enable if needed ───────────────────────
     let submitBtn = null;
-    for (let i = 0; i < 50; i++) {
+    for (let i = 0; i < 30; i++) {
       for (const btn of document.querySelectorAll('button')) {
         const iEl = btn.querySelector('i');
-        if (iEl && iEl.textContent.trim() === 'arrow_forward') {
-          const isDisabled =
-            btn.disabled === true ||
-            btn.getAttribute('aria-disabled') === 'true';
-          if (!isDisabled) {
-            submitBtn = btn;
-            break;
-          }
+        const txt = (btn.textContent || "").toLowerCase();
+        if ((iEl && iEl.textContent.trim() === 'arrow_forward') || (txt.includes('create') && (!iEl || iEl.textContent.trim() !== 'add'))) {
+          btn.disabled = false;
+          btn.removeAttribute('aria-disabled');
+          submitBtn = btn;
+          break;
         }
       }
       if (submitBtn) break;
       await sleep(100);
     }
 
-    // If button never naturally enabled, find it anyway
-    if (!submitBtn) {
-      for (const btn of document.querySelectorAll('button')) {
-        const iEl = btn.querySelector('i');
-        if (iEl && iEl.textContent.trim() === 'arrow_forward') {
-          submitBtn = btn;
-          break;
-        }
-      }
-      if (!submitBtn) {
-        for (const btn of document.querySelectorAll('button')) {
-          const iEl = btn.querySelector('i');
-          if (btn.textContent.includes('Create') && iEl?.textContent.trim() !== 'add') {
-            submitBtn = btn;
-            break;
-          }
-        }
-      }
-    }
-
     if (!submitBtn) return { status: 'no-submit-button' };
 
-    // ── 6. Return button center coordinates so background.js can CDP-click ────
     const rect = submitBtn.getBoundingClientRect();
     const btnCenterX = Math.round(rect.left + rect.width / 2);
     const btnCenterY = Math.round(rect.top + rect.height / 2);
-
-    console.log(`[Injector] Submit button center: (${btnCenterX}, ${btnCenterY}). Enabled: ${!submitBtn.disabled}`);
 
     return {
       status: 'ready-to-click',

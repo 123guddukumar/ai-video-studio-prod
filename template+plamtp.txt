@@ -53,17 +53,10 @@ ASHA VIHAR REALITY
 सही Property, सही फैसला।
 
 
-ye dekho jab maine script paste kiya aur 30sec ka tha to 30sec selectt kr diya aur ratio and language select kr diya uske baad generate pe click kiya to script m 8secne h  but ye 5 hi secene 6sec wala kyu genereate kiya 
-
-tum  aisa kato do uper buttom laga do ek jo abhi h wo topic se video banana aur ek manually script paste kr ke jab manually script paste krne wla select kr e to usme ek paste box dena jaha script paste kr sake aur uske niche upload reference image option de dena aur language  and ratio select ka option dena aur tum script se video time lenght dekhoge kitna ka h 30sec h script m ya 45 ya 60sec jitna sec ka h utna hi sec ka video banana aur jitna scene h script m utna hi scene prompt generate krna editor director usko scene video ko script ke anusara voideo scene ka time lenght rkhega agr jayada hoga to usko cut ya speed fast kr dega 
-
-aur abhi bahut time laga rha h sab thoda fast kro
-
-
 
 
 Concept 1: Gated Society Security & Family Happiness (भावनात्मक और सुरक्षा)
-Topic Prompt: Create a 30-second emotional real estate ad for Asha Vihar Reality. The video should target young parents. Highlight the contrast between unsafe open streets and a highly secure gated society where kids play safely. Show modern security guards, CCTV cameras, and a beautiful park. The tone should be warm, trustworthy, and premium. Visual style should be cinematic realistic with warm sunlight. Ends with the tagline: "Asha Vihar Reality — सही Property, सही फैसला।"
+Topic Prompt: Create a 30-second emotional rel estate ad for Asha Vihar Reality. The video should target young parents. Highlight the contrast between unsafe open streets and a highly secure gated society where kids play safely. Show modern security guards, CCTV cameras, and a beautiful park. The tone should be warm, trustworthy, and premium. Visual style should be cinematic realistic with warm sunlight. Ends with the tagline: "Asha Vihar Reality — सही Property, सही फैसला।"
 
 Concept 2: Investment & Wealth Growth (स्मार्ट इन्वेस्टर्स के लिए)
 Topic Prompt: Create a 30-second logical real estate ad focused on high investment returns with Asha Vihar Reality. Show a smart professional analyzing rising price charts on a tablet, transitioning to a rapidly developing prime location with schools and highways nearby. Highlight the theme of "Rent vs Own" and wealth generation. The tone should be professional, motivational, and confident. Style: Modern corporate cinematic. Ends with brand CTA.
