@@ -239,7 +239,7 @@ function clickElement(el) {
 }
 
 // Helper to sanitize prompts before sending to Google Flow
-function sanitizePromptText(text) {
+function sanitizePromptText(text, action = 'generate_image') {
   if (!text) return text;
   let sanitized = text
     // Minors & Children
@@ -277,21 +277,38 @@ function sanitizePromptText(text) {
     .replace(/\b(registry\s*discount|home\s*loan\s*approval|hidden\s*charges|special\s*discount\s*offer)\b/gi, "premier luxury living")
     .replace(/\brising\s*price\s*charts\s*on\s*a\s*tablet\b/gi, "architectural floorplans on a sleek tablet");
 
+  // Video-specific motion prompt cleanup (remove buzzwords that trigger Veo 2 filters)
+  if (action === 'generate_video') {
+    sanitized = sanitized
+      .replace(/\b(4k|8k|hd|ultra[- ]?realistic|hyper[- ]?realistic|photorealistic)\b/gi, "")
+      .replace(/\b(storefront|boutique|shop|building)\b/gi, "scene")
+      .replace(/\b(dolly forward|dolly in)\b/gi, "slow forward push-in")
+      .replace(/\bsun flare\b/gi, "soft light");
+  }
+
   sanitized = sanitized.replace(/\s+/g, " ").trim();
   sanitized = sanitized.replace(/^[\s,.\-—:]+|[\s,.\-—:]+$/g, "").trim();
 
-  // Cap to 25 words max for pure safety
+  // Cap to 20 words max for pure safety
   const words = sanitized.split(" ");
-  if (words.length > 25) {
-    sanitized = words.slice(0, 25).join(" ");
+  if (words.length > 20) {
+    sanitized = words.slice(0, 20).join(" ");
   }
 
   return sanitized.trim();
 }
 
 // Helper to strip safety trigger words and return a tweaked prompt
-function tweakPrompt(originalPrompt, attempt) {
-  let tweaked = sanitizePromptText(originalPrompt);
+function tweakPrompt(originalPrompt, attempt, action = 'generate_image') {
+  if (action === 'generate_video') {
+    if (attempt === 2) {
+      return "Smooth cinematic slow forward camera movement, subtle natural lighting shift";
+    } else if (attempt === 3) {
+      return "Cinematic slow camera pan, ambient atmospheric lighting";
+    }
+  }
+
+  let tweaked = sanitizePromptText(originalPrompt, action);
   if (attempt === 2) {
     tweaked = tweaked
       .replace(/security/gi, "safety")
@@ -759,7 +776,7 @@ function isReferenceImageAttached() {
   );
   console.log(`Snapshotted ${preExistingAssets.size} pre-existing asset URLs before generation.`);
 
-  let currentPrompt = sanitizePromptText(prompt);
+  let currentPrompt = sanitizePromptText(prompt, action);
   const maxAttempts = 3;
   let resultElement = null;
   
@@ -962,7 +979,7 @@ function isReferenceImageAttached() {
     // If we reach here, it failed. Tweak prompt and retry if we have remaining attempts.
     if (attempt < maxAttempts) {
       console.log(`Attempt ${attempt} failed. Dismissing error popup and preparing next attempt...`);
-      currentPrompt = tweakPrompt(prompt, attempt + 1);
+      currentPrompt = tweakPrompt(prompt, attempt + 1, action);
       
       // Dismiss error dialog / failed generation card
       try {
