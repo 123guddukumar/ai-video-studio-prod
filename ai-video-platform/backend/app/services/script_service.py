@@ -35,15 +35,17 @@ RULES:
 - Scene durations must sum exactly to the requested total duration.
 - Narration must be natural, engaging, and match scene duration (approximately 
   2.5 words per second).
-- Image and video prompts must be highly cinematic, descriptive, but concise (maximum 35 words each) to stay within token limits.
+- Image and video prompts must be highly cinematic, descriptive, but concise (strictly 15 to 25 words each) to prevent generation errors.
 - Include camera movements, lighting, subject, environment, composition.
-- Never include text overlays, logos, or watermarks in prompts.
+- NEVER include brand names (e.g. "Asha Vihar Reality", "Asha Vihar"), company logos, text overlays, taglines, slogans, billboard words, or watermarks in `image_prompt` or `video_prompt`. Google generation models block prompts containing brand names or text rendering instructions under "unusual activity" policy.
+- NEVER include meta-instructions like "Ends with brand CTA", "Ends with tagline", "Tone:", "Visual style:", "Concept:", "Ad for..." inside `image_prompt` or `video_prompt`. Keep visual prompts 100% pure physical scene descriptions.
 - Maintain visual consistency across all scenes using the visual_style object.
 - Scene numbers must be sequential starting at 1.
 - MULTI-LANGUAGE RULE: If the target language is NOT English, write ONLY the `narration` (voiceover) and the `title` in that language. All other JSON fields (image_prompt, video_prompt, visual_description, visual_style, color_style, camera_style, environment_style) MUST be in English. This is required because image generation models only understand English prompts, and it prevents token count overflow.
 - REAL ESTATE & PREMIUM BUSINESS RULE: If the project topic is about real estate, property sales, or premium/corporate business, you MUST generate highly realistic, photorealistic, luxury-focused, and premium prompts. Avoid terms like "illustration", "cartoon", "3D render", "unreal engine". Instead, use descriptors like "photorealistic", "ultra-high-end modern architectural photography", "soft morning volumetric lighting", "immaculately styled luxury interior design", "sleek, modern, and realistic drone shots", "high-end real estate presentation", "professional cinematography with shallow depth of field". Ensure the subject is portrayed in a premium, elegant, and realistic light.
 - IMAGE-TO-VIDEO MOTION RULE: The `video_prompt` is used specifically to animate the generated scene image into video. Therefore, `video_prompt` MUST focus on camera movement, lighting changes, and subtle natural motion (e.g. 'Smooth cinematic slow push-in, subtle natural breeze, soft morning light shift, 4k ultra-realistic motion'). NEVER write a `video_prompt` that describes a completely different scene or contradicts the `image_prompt`.
 - STRICT ZERO-TOLERANCE MINOR / SAFETY RULE: AI video models strictly block any content featuring children, kids, schoolboys, schoolgirls, minors, toddlers, or babies (triggers safety filter 'harmful content related to minors' or 'uploads of minors'). You MUST NEVER use words like 'child', 'children', 'kid', 'kids', 'boy', 'boys', 'girl', 'girls', 'minor', 'minors', 'toddler', 'baby', 'teenager', 'schoolboy', 'schoolbag', 'playground'. If the user's input mentions children or school, adapt the visual prompts to depict modern luxury homes, adult residents, young couples, beautiful gardens, walking tracks, smart access gates, or architectural spaces!
+- STRICT ZERO-TOLERANCE SURVEILLANCE / SECURITY FILTER RULE: AI video models block words like 'CCTV', 'surveillance', 'security guards', 'cameras watching', 'digital locks', 'police'. Replace these with 'grand architectural entrance with ambient lighting', 'luxury concierge foyer', 'peaceful gated neighborhood'.
 """
 
 def _build_user_prompt(
@@ -182,23 +184,61 @@ def _extract_json(text: str) -> dict:
         except json.JSONDecodeError:
             pass
 
+
 def _sanitize_prompt_text(text: str) -> str:
-    """Sanitize prompt to remove any minor/safety filter trigger words."""
+    """Sanitize prompt to remove any brand names, surveillance, minors, or meta directives."""
     if not text:
         return text
 
     replacements = [
+        # Minors & Children
         (r"\b(kids?|children|child|minors?|toddlers?|babies|baby|infants?|teenagers?|schoolboys?|schoolgirls?)\b", "residents"),
         (r"\bschool\s*bag\b", "briefcase"),
-        (r"\bplay\s*area\b", "landscaped park"),
-        (r"\bplayground\b", "community garden"),
+        (r"\bplay\s*area\b", "landscaped garden"),
+        (r"\bplayground\b", "community park"),
         (r"\byoung\s*parents\b", "young homeowners"),
-        (r"\bplaying\b", "walking"),
+        (r"\bplaying\b", "strolling"),
         (r"\bplay\s+safely\b", "enjoy outdoors"),
+        (r"\bschools?\b", "scenic boulevard"),
+        (r"\bclassrooms?\b", "modern lounge"),
+        
+        # Surveillance & Security
+        (r"\bCCTV\s*(cameras?)?\b", "ambient architectural lighting"),
+        (r"\bsecurity\s*guards?\b", "concierge foyer"),
+        (r"\bdigital\s*(video\s*)?door\s*locks?\b", "modern sleek doorway"),
+        (r"\bsurveillance\b", "peaceful setting"),
+        
+        # Brand names, Signage, Slogans & Taglines
+        (r"\bAsha\s*Vihar\s*(Reality|Realtech|Enterprises)?\b", "luxury modern residential community"),
+        (r"\b[A-Z]{1,4}\s*(Jawellry|Jewelry|Jewellers|Enterprises|Corp|Ltd|Pvt)?\s*signage\b", "illuminated boutique entrance"),
+        (r"\b(signage|signboard|billboard|neon\s*sign|board\s*saying|text\s*saying|written\s*text)\b", "storefront display"),
+        (r"\b(brand\s*CTA|call\s*to\s*action|tagline|slogan|logo|watermark)\b", ""),
+        (r"\b\d+:\d+\s*(aspect|ratio)?\b", ""),
+        (r"\b(aspect\s*ratio|9:16|16:9)\b", ""),
+        (r"\bEnds\s*with\s*(brand\s*CTA|tagline|brand)?.*$", ""),
+        (r"\bTone:\s*.*$", ""),
+        (r"\bVisual\s*style:\s*.*$", ""),
+        (r"\bStyle:\s*.*$", ""),
+        (r"\bTopic\s*Prompt:\s*.*$", ""),
+        (r"\bConcept\s*\d+:?\s*.*$", ""),
+        
+        # Financial / Marketing words
+        (r"\b(registry\s*discount|home\s*loan\s*approval|hidden\s*charges|special\s*discount\s*offer)\b", "premier luxury living"),
+        (r"\brising\s*price\s*charts\s*on\s*a\s*tablet\b", "architectural floorplans on a sleek tablet"),
     ]
     sanitized = text
     for pattern, repl in replacements:
         sanitized = re.sub(pattern, repl, sanitized, flags=re.IGNORECASE)
+        
+    # Clean up excess spaces and punctuation
+    sanitized = re.sub(r"\s+", " ", sanitized).strip()
+    sanitized = re.sub(r"^[\s,.\-—:]+|[\s,.\-—:]+$", "", sanitized).strip()
+    
+    # Cap prompt length to 30 words max for safety
+    words = sanitized.split()
+    if len(words) > 30:
+        sanitized = " ".join(words[:30])
+        
     return sanitized.strip()
 
 

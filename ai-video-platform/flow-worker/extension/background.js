@@ -61,9 +61,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  // ── Trusted CDP type & submit request from content script ───────────────
+  if (message.type === 'CDP_TYPE_AND_SUBMIT') {
+    const tabId = sender.tab?.id;
+    if (!tabId) { sendResponse({ ok: false, error: 'No tab id' }); return true; }
+    const { text, x, y } = message;
+    cdpTypeAndSubmit(tabId, text, x, y)
+      .then(() => sendResponse({ ok: true }))
+      .catch(e => sendResponse({ ok: false, error: e.message }));
+    return true;
+  }
+
   // ── Trusted CDP click request from content script ────────────────────────
-  // content.js sends button screen coordinates; we use chrome.debugger to fire
-  // a real Input.dispatchMouseEvent with isTrusted=true.
   if (message.type === 'CLICK_SUBMIT_BUTTON') {
     const tabId = sender.tab?.id;
     if (!tabId) { sendResponse({ ok: false, error: 'No tab id' }); return true; }
@@ -94,18 +103,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 
 // Helper to fetch network URL from background and convert to Data URL
-// Safe to run in Service Workers (doesn't use FileReader) and handles large files via chunking
 async function fetchNetworkUrlAsDataUrl(url) {
   const response = await fetch(url);
   if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
   const blob = await response.blob();
   const buffer = await blob.arrayBuffer();
   
-  // Convert ArrayBuffer to base64 string safely using chunking to prevent stack overflow
   let binary = '';
   const bytes = new Uint8Array(buffer);
   const len = bytes.byteLength;
-  const chunkSize = 8192; // process 8kb chunks
+  const chunkSize = 8192;
   for (let i = 0; i < len; i += chunkSize) {
     const chunk = bytes.subarray(i, i + chunkSize);
     binary += String.fromCharCode.apply(null, chunk);
@@ -116,18 +123,73 @@ async function fetchNetworkUrlAsDataUrl(url) {
   return `data:${mime};base64,${base64}`;
 }
 
+// ── CDP native typing and submit via chrome.debugger ─────────────────────────
+async function cdpTypeAndSubmit(tabId, text, x, y) {
+  const target = { tabId };
+  try {
+    await chrome.debugger.attach(target, '1.3');
+  } catch (e) {
+    if (!e.message.includes('already attached')) throw e;
+  }
+  try {
+    // 1. Select All and delete
+    await chrome.debugger.sendCommand(target, 'Input.dispatchKeyEvent', {
+      type: 'rawKeyDown', windowsVirtualKeyCode: 65, modifiers: 2, key: 'a', code: 'KeyA'
+    });
+    await chrome.debugger.sendCommand(target, 'Input.dispatchKeyEvent', {
+      type: 'keyUp', windowsVirtualKeyCode: 65, modifiers: 0, key: 'a', code: 'KeyA'
+    });
+    await new Promise(r => setTimeout(r, 50));
+    await chrome.debugger.sendCommand(target, 'Input.dispatchKeyEvent', {
+      type: 'rawKeyDown', windowsVirtualKeyCode: 8, key: 'Backspace', code: 'Backspace'
+    });
+    await chrome.debugger.sendCommand(target, 'Input.dispatchKeyEvent', {
+      type: 'keyUp', windowsVirtualKeyCode: 8, key: 'Backspace', code: 'Backspace'
+    });
+    await new Promise(r => setTimeout(r, 100));
+
+    // 2. Native CDP text insertion (triggers real TextInputClient events in Chrome)
+    await chrome.debugger.sendCommand(target, 'Input.insertText', { text: text });
+    await new Promise(r => setTimeout(r, 300));
+
+    // 3. Dispatch Enter key to submit
+    await chrome.debugger.sendCommand(target, 'Input.dispatchKeyEvent', {
+      type: 'rawKeyDown', windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13, macCharCode: 13,
+      unmodifiedText: '\r', text: '\r', key: 'Enter', code: 'Enter'
+    });
+    await new Promise(r => setTimeout(r, 50));
+    await chrome.debugger.sendCommand(target, 'Input.dispatchKeyEvent', {
+      type: 'keyUp', windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13, macCharCode: 13,
+      unmodifiedText: '\r', text: '\r', key: 'Enter', code: 'Enter'
+    });
+
+    // 4. Also click submit button coordinates if provided
+    if (x && y) {
+      await new Promise(r => setTimeout(r, 200));
+      await chrome.debugger.sendCommand(target, 'Input.dispatchMouseEvent', {
+        type: 'mousePressed', x, y, button: 'left', clickCount: 1,
+        buttons: 1, modifiers: 0, timestamp: Date.now() / 1000
+      });
+      await new Promise(r => setTimeout(r, 80));
+      await chrome.debugger.sendCommand(target, 'Input.dispatchMouseEvent', {
+        type: 'mouseReleased', x, y, button: 'left', clickCount: 1,
+        buttons: 0, modifiers: 0, timestamp: Date.now() / 1000
+      });
+    }
+  } finally {
+    try { await chrome.debugger.detach(target); } catch(e) {}
+  }
+}
+
 // ── CDP trusted click via chrome.debugger ────────────────────────────────────
-// This is the ONLY way to dispatch isTrusted=true mouse events from an extension.
 async function cdpTrustedClick(tabId, x, y) {
   const target = { tabId };
   try {
     await chrome.debugger.attach(target, '1.3');
   } catch (e) {
-    // Already attached is OK
     if (!e.message.includes('already attached')) throw e;
   }
   try {
-    // Dispatch trusted mouse press & release
     await chrome.debugger.sendCommand(target, 'Input.dispatchMouseEvent', {
       type: 'mousePressed', x, y, button: 'left', clickCount: 1,
       buttons: 1, modifiers: 0, timestamp: Date.now() / 1000
@@ -138,33 +200,39 @@ async function cdpTrustedClick(tabId, x, y) {
       buttons: 0, modifiers: 0, timestamp: Date.now() / 1000
     });
     
-    // Also dispatch trusted Enter key event (universal submit trigger in Google Flow)
+    // Also dispatch trusted Enter key event
     await new Promise(r => setTimeout(r, 100));
     await chrome.debugger.sendCommand(target, 'Input.dispatchKeyEvent', {
-      type: 'rawKeyDown',
-      windowsVirtualKeyCode: 13,
-      nativeVirtualKeyCode: 13,
-      macCharCode: 13,
-      unmodifiedText: '\r',
-      text: '\r',
-      key: 'Enter',
-      code: 'Enter'
+      type: 'rawKeyDown', windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13, macCharCode: 13,
+      unmodifiedText: '\r', text: '\r', key: 'Enter', code: 'Enter'
     });
     await new Promise(r => setTimeout(r, 50));
     await chrome.debugger.sendCommand(target, 'Input.dispatchKeyEvent', {
-      type: 'keyUp',
-      windowsVirtualKeyCode: 13,
-      nativeVirtualKeyCode: 13,
-      macCharCode: 13,
-      unmodifiedText: '\r',
-      text: '\r',
-      key: 'Enter',
-      code: 'Enter'
+      type: 'keyUp', windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13, macCharCode: 13,
+      unmodifiedText: '\r', text: '\r', key: 'Enter', code: 'Enter'
     });
   } finally {
     try { await chrome.debugger.detach(target); } catch(e) {}
   }
 }
+
+let isUserDisconnected = false;
+
+// Alarms listener to keep service worker and WebSocket permanently alive
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === 'keepAliveAlarm') {
+    if (!socket || socket.readyState !== WebSocket.OPEN) {
+      if (!isUserDisconnected) {
+        log('KeepAlive: Reconnecting WebSocket...', 'info');
+        connectWebSocket();
+      }
+    } else {
+      try {
+        socket.send(JSON.stringify({ type: 'PING' }));
+      } catch (e) {}
+    }
+  }
+});
 
 // Convert Server URL to WS URL
 function getWsUrl(url) {
@@ -182,10 +250,17 @@ function getWsUrl(url) {
   return `${wsUrl}/extension/ws`;
 }
 
+let reconnectTimeout = null;
+
 // Connect WebSocket
 function connectWebSocket() {
+  if (reconnectTimeout) {
+    clearTimeout(reconnectTimeout);
+    reconnectTimeout = null;
+  }
   if (socket) {
-    socket.close();
+    try { socket.close(); } catch(e) {}
+    socket = null;
   }
   
   const wsUrl = getWsUrl(serverUrl);
@@ -198,6 +273,7 @@ function connectWebSocket() {
     socket.onopen = () => {
       log('Connected to Flow Worker backend!', 'success');
       setStatus('connected');
+      isUserDisconnected = false;
       startHeartbeat();
     };
     
@@ -232,6 +308,14 @@ function connectWebSocket() {
       setStatus('disconnected');
       socket = null;
       stopHeartbeat();
+      
+      // Auto reconnect immediately if not manually disconnected
+      if (!isUserDisconnected) {
+        reconnectTimeout = setTimeout(() => {
+          log('Auto-reconnecting to backend WebSocket...', 'info');
+          connectWebSocket();
+        }, 2000);
+      }
     };
     
     socket.onerror = (error) => {
@@ -241,11 +325,19 @@ function connectWebSocket() {
   } catch (err) {
     log(`Connection failed: ${err.message}`, 'error');
     setStatus('disconnected');
+    if (!isUserDisconnected) {
+      reconnectTimeout = setTimeout(connectWebSocket, 3000);
+    }
   }
 }
 
 // Disconnect WebSocket
 function disconnectWebSocket() {
+  isUserDisconnected = true;
+  if (reconnectTimeout) {
+    clearTimeout(reconnectTimeout);
+    reconnectTimeout = null;
+  }
   if (socket) {
     socket.close();
     socket = null;
@@ -272,31 +364,45 @@ function stopHeartbeat() {
   }
 }
 
-// Helper: Ensure Google Flow tab is open and loaded
-async function ensureFlowTab() {
+// Helper: Get or create Google Flow tab based on task action
+// For generate_image/scene: Opens a fresh clean tab
+// For generate_video: Reuses existing tab where image was just generated!
+async function getFlowTabForTask(action) {
   const targetUrl = 'https://labs.google/fx/tools/flow';
-  
-  // Find if there's already a tab matching this
   const tabs = await chrome.tabs.query({});
-  let flowTab = tabs.find(t => t.url && t.url.includes('labs.google/fx/tools/flow'));
-  
-  if (flowTab) {
-    log(`Found existing Google Flow tab (ID: ${flowTab.id}). Activating it.`, 'info');
-    await chrome.tabs.update(flowTab.id, { active: true });
-    // Bring window to focus
-    await chrome.windows.update(flowTab.windowId, { focused: true });
-    return flowTab.id;
+  const flowTabs = tabs.filter(t => t.url && t.url.includes('labs.google/fx/tools/flow'));
+
+  if (action === 'generate_video') {
+    // If video task: find existing tab with the generated image
+    if (flowTabs.length > 0) {
+      const existingTab = flowTabs[flowTabs.length - 1];
+      log(`Reusing existing Google Flow tab (ID: ${existingTab.id}) containing generated image...`, 'info');
+      try {
+        await chrome.tabs.update(existingTab.id, { active: true });
+        await chrome.windows.update(existingTab.windowId, { focused: true });
+      } catch (e) {}
+      return existingTab.id;
+    }
   }
-  
-  log('Opening new Google Flow tab...', 'info');
+
+  // For fresh scene or image: close old tabs to prevent canvas clutter
+  for (const oldTab of flowTabs) {
+    await chrome.tabs.remove(oldTab.id).catch(() => {});
+  }
+  await new Promise(r => setTimeout(r, 600));
+
+  log('Opening brand new clean Google Flow tab...', 'info');
   const tab = await chrome.tabs.create({ url: targetUrl, active: true });
   
-  // Wait for loading to finish
+  try {
+    await chrome.windows.update(tab.windowId, { focused: true });
+  } catch (e) {}
+  
   return new Promise((resolve) => {
     const listener = (tabId, info) => {
       if (tabId === tab.id && info.status === 'complete') {
         chrome.tabs.onUpdated.removeListener(listener);
-        log('Google Flow tab fully loaded.', 'info');
+        log('Google Flow tab fully loaded and ready.', 'info');
         resolve(tab.id);
       }
     };
@@ -318,56 +424,80 @@ function sendTaskResult(taskId, success, errorMsg = '') {
 
 // Orchestrate the task steps by communicating with content script
 async function executeTask(task) {
-  const tabId = await ensureFlowTab();
+  const tabId = await getFlowTabForTask(task.action);
   
-  // Wait 2.5 seconds to make sure DOM is fully settled
-  await new Promise(r => setTimeout(r, 2500));
+  // Wait 3.5 seconds to make sure DOM is fully settled
+  await new Promise(r => setTimeout(r, 3500));
   
   if (task.action === 'generate_scene') {
-    // Generate video directly (skipping image generation)
-    log('Starting Direct Video Generation (Skipping Image Step)...', 'info');
+    // ── STEP 1: Generate Image on Fresh Canvas ──────────────────────────────
+    log(`[Scene ${task.scene_number}] Step 1: Generating Image...`, 'info');
+    const imageResult = await runGenerationInTab(tabId, {
+      action: 'generate_image',
+      prompt: task.image_prompt,
+      aspect_ratio: task.aspect_ratio,
+      imageUrl: task.image_url
+    });
+    
+    if (!imageResult || !imageResult.dataUrl) {
+      throw new Error('Image generation failed or returned empty data URL.');
+    }
+    
+    log(`[Scene ${task.scene_number}] Uploading generated image to server...`, 'info');
+    const imgUploaded = await uploadAsset(task, 'image', imageResult.dataUrl);
+    if (!imgUploaded) throw new Error('Image asset upload to server failed');
+    log(`[Scene ${task.scene_number}] Image saved!`, 'success');
+    
+    await new Promise(r => setTimeout(r, 2000));
+    
+    // ── STEP 2: Animate the same Generated Image into Video (tab stays open!) ──
+    log(`[Scene ${task.scene_number}] Step 2: Animating generated image into Video (Veo 2)...`, 'info');
     const videoResult = await runGenerationInTab(tabId, {
       action: 'generate_video',
       prompt: task.video_prompt,
       duration: task.duration,
       aspect_ratio: task.aspect_ratio,
-      imageUrl: task.image_url
+      imageUrl: imageResult.dataUrl // pass generated image dataUrl as reference!
     });
     
-    log('Video generation completed by content script, preparing upload...', 'info');
-    const videoUploaded = await uploadAsset(task, 'video', videoResult.dataUrl);
-    if (!videoUploaded) throw new Error('Video upload failed');
-    
-    // Extract thumbnail from video data URL and upload as image for compatibility
-    try {
-      log('Extracting video thumbnail for UI dashboard...', 'info');
-      const thumbnailDataUrl = videoResult.thumbnailDataUrl || videoResult.dataUrl;
-      const imgUploaded = await uploadAsset(task, 'image', thumbnailDataUrl);
-      if (imgUploaded) {
-        log('Uploaded video thumbnail successfully!', 'success');
-      }
-    } catch (e) {
-      log(`Failed to upload video thumbnail: ${e.message}`, 'warning');
+    if (!videoResult || !videoResult.dataUrl) {
+      throw new Error('Video generation failed or returned empty data URL.');
     }
     
-    log('Assets generated and uploaded successfully!', 'success');
+    log(`[Scene ${task.scene_number}] Uploading generated video to server...`, 'info');
+    const videoUploaded = await uploadAsset(task, 'video', videoResult.dataUrl);
+    if (!videoUploaded) throw new Error('Video asset upload to server failed');
+    log(`[Scene ${task.scene_number}] Video saved!`, 'success');
+    
+    // ── STEP 3: Close Tab ONLY after BOTH Image and Video are saved! ─────────
+    log(`[Scene ${task.scene_number}] Both Image & Video completed! Closing Google Flow tab...`, 'info');
+    try {
+      await chrome.tabs.remove(tabId);
+    } catch (e) {}
+    
+    log(`[Scene ${task.scene_number}] Scene complete and closed cleanly for next scene!`, 'success');
     sendTaskResult(task.task_id, true);
     setStatus('connected');
+    
   } else if (task.action === 'generate_image') {
+    log(`Generating Image for Scene ${task.scene_number}...`, 'info');
     const result = await runGenerationInTab(tabId, {
       action: 'generate_image',
       prompt: task.image_prompt,
-      aspect_ratio: task.aspect_ratio
+      aspect_ratio: task.aspect_ratio,
+      imageUrl: task.image_url
     });
     
     const uploaded = await uploadAsset(task, 'image', result.dataUrl);
     if (!uploaded) throw new Error('Image upload failed');
     
-    log('Image asset generated and uploaded successfully!', 'success');
+    // KEEP TAB OPEN so video generation can animate this image!
+    log('Image generated & saved! Keeping tab open for video animation...', 'success');
     sendTaskResult(task.task_id, true);
     setStatus('connected');
     
   } else if (task.action === 'generate_video') {
+    log(`Generating Video from Image for Scene ${task.scene_number}...`, 'info');
     const result = await runGenerationInTab(tabId, {
       action: 'generate_video',
       prompt: task.video_prompt,
@@ -379,7 +509,10 @@ async function executeTask(task) {
     const uploaded = await uploadAsset(task, 'video', result.dataUrl);
     if (!uploaded) throw new Error('Video upload failed');
     
-    log('Video asset generated and uploaded successfully!', 'success');
+    // Close tab ONLY after video is complete and uploaded!
+    log('Video generated & uploaded! Closing tab for next scene...', 'success');
+    try { await chrome.tabs.remove(tabId); } catch (e) {}
+    
     sendTaskResult(task.task_id, true);
     setStatus('connected');
   }

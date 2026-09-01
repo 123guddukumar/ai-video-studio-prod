@@ -241,17 +241,52 @@ function clickElement(el) {
 // Helper to sanitize prompts before sending to Google Flow
 function sanitizePromptText(text) {
   if (!text) return text;
-  return text
+  let sanitized = text
+    // Minors & Children
     .replace(/\b(kids?|children|child|minors?|toddlers?|babies|baby|infants?|teenagers?|schoolboys?|schoolgirls?)\b/gi, "residents")
     .replace(/\bschool\s*bag\b/gi, "briefcase")
-    .replace(/\bplay\s*area\b/gi, "landscaped park")
-    .replace(/\bplayground\b/gi, "community garden")
+    .replace(/\bplay\s*area\b/gi, "landscaped garden")
+    .replace(/\bplayground\b/gi, "community park")
     .replace(/\byoung\s*parents\b/gi, "young homeowners")
-    .replace(/\bplaying\b/gi, "walking")
+    .replace(/\bplaying\b/gi, "strolling")
     .replace(/\bplay\s+safely\b/gi, "enjoy outdoors")
-    .replace(/\bsecurity\s*guard\b/gi, "reception staff")
-    .replace(/\bpolice\b/gi, "staff")
-    .trim();
+    .replace(/\bschools?\b/gi, "scenic boulevard")
+    .replace(/\bclassrooms?\b/gi, "modern lounge")
+    
+    // Surveillance & Security
+    .replace(/\bCCTV\s*(cameras?)?\b/gi, "ambient architectural lighting")
+    .replace(/\bsecurity\s*guards?\b/gi, "concierge foyer")
+    .replace(/\bdigital\s*(video\s*)?door\s*locks?\b/gi, "modern sleek doorway")
+    .replace(/\bsurveillance\b/gi, "peaceful setting")
+    
+    // Brand names, Signage, Slogans & Taglines
+    .replace(/\bAsha\s*Vihar\s*(Reality|Realtech|Enterprises)?\b/gi, "luxury modern residential community")
+    .replace(/\b[A-Z]{1,4}\s*(Jawellry|Jewelry|Jewellers|Enterprises|Corp|Ltd|Pvt)?\s*signage\b/gi, "illuminated boutique entrance")
+    .replace(/\b(signage|signboard|billboard|neon\s*sign|board\s*saying|text\s*saying|written\s*text)\b/gi, "storefront display")
+    .replace(/\b(brand\s*CTA|call\s*to\s*action|tagline|slogan|logo|watermark)\b/gi, "")
+    .replace(/\b\d+:\d+\s*(aspect|ratio)?\b/gi, "")
+    .replace(/\b(aspect\s*ratio|9:16|16:9)\b/gi, "")
+    .replace(/\bEnds\s*with\s*(brand\s*CTA|tagline|brand)?.*$/gi, "")
+    .replace(/\bTone:\s*.*$/gi, "")
+    .replace(/\bVisual\s*style:\s*.*$/gi, "")
+    .replace(/\bStyle:\s*.*$/gi, "")
+    .replace(/\bTopic\s*Prompt:\s*.*$/gi, "")
+    .replace(/\bConcept\s*\d+:?\s*.*$/gi, "")
+    
+    // Financial / Marketing words
+    .replace(/\b(registry\s*discount|home\s*loan\s*approval|hidden\s*charges|special\s*discount\s*offer)\b/gi, "premier luxury living")
+    .replace(/\brising\s*price\s*charts\s*on\s*a\s*tablet\b/gi, "architectural floorplans on a sleek tablet");
+
+  sanitized = sanitized.replace(/\s+/g, " ").trim();
+  sanitized = sanitized.replace(/^[\s,.\-—:]+|[\s,.\-—:]+$/g, "").trim();
+
+  // Cap to 25 words max for pure safety
+  const words = sanitized.split(" ");
+  if (words.length > 25) {
+    sanitized = words.slice(0, 25).join(" ");
+  }
+
+  return sanitized.trim();
 }
 
 // Helper to strip safety trigger words and return a tweaked prompt
@@ -307,37 +342,47 @@ function checkGenerationError() {
 
 // Helper to select Mode (Image/Video) inside the open popover container (with retry/waiting)
 async function findModeOption(mode, timeoutMs = 3000) {
-  const textToFind = mode === 'generate_image' ? 'Image' : 'Video';
+  const isVideo = mode === 'generate_video';
   const startTime = Date.now();
   while (Date.now() - startTime < timeoutMs) {
     const containers = document.querySelectorAll("[role='dialog'], [role='menu'], [role='listbox'], .radix-popover-content, div[class*='popover'], div[class*='content']");
     for (let container of containers) {
-      const elements = container.querySelectorAll("button, div, span, [role='menuitem']");
+      const elements = container.querySelectorAll("button, [role='tab'], [role='menuitem'], div, span");
       for (let el of elements) {
-        const text = el.textContent.trim().toLowerCase();
-        if (text === textToFind.toLowerCase()) {
-          return el;
+        const text = (el.textContent || "").trim().toLowerCase();
+        const aria = (el.getAttribute("aria-label") || "").toLowerCase();
+        const val = (el.getAttribute("value") || el.getAttribute("data-value") || "").toLowerCase();
+        
+        if (isVideo) {
+          if (text === "video" || aria === "video" || val === "video" || text.startsWith("video ") || text.includes("veo")) {
+            return el;
+          }
+        } else {
+          if (text === "image" || aria === "image" || val === "image" || text.startsWith("image ") || text.includes("imagen")) {
+            return el;
+          }
         }
       }
     }
     await sleep(150);
   }
   // Global search fallback
-  return findElement(`button:has-text('${textToFind}'), [role='menuitem']:has-text('${textToFind}')`);
+  return findElement(isVideo ? "button:has-text('Video'), [role='tab']:has-text('Video')" : "button:has-text('Image'), [role='tab']:has-text('Image')");
 }
 
-// Helper to select Model (Nano/Fast) inside the open popover container (with retry/waiting)
+// Helper to select Model (Veo 2 vs Imagen 3) inside the open popover container (with retry/waiting)
 async function findModelOption(mode, timeoutMs = 3000) {
-  // Broaden to handle variations of Veo 2, Veo, Imagen 3, Nano, Fast, etc.
-  const searchTerms = mode === 'generate_image' 
-    ? ['imagen 3 (nano)', 'imagen 3 (fast)', 'imagen 3', 'imagen', 'nano', 'fast']
-    : ['veo 2 (nano)', 'veo 2 (fast)', 'veo 2', 'veo (nano)', 'veo (fast)', 'veo', 'nano', 'fast'];
+  // Strict terms — do NOT use generic 'fast' or 'nano' without model prefix to avoid cross-mode collision!
+  const isVideo = mode === 'generate_video';
+  const searchTerms = isVideo
+    ? ['veo 2 (fast)', 'veo 2 (nano)', 'veo 2', 'veo (fast)', 'veo (nano)', 'veo']
+    : ['imagen 3 (fast)', 'imagen 3 (nano)', 'imagen 3', 'imagen'];
 
   const startTime = Date.now();
   while (Date.now() - startTime < timeoutMs) {
     const containers = document.querySelectorAll("[role='dialog'], [role='menu'], [role='listbox'], .radix-popover-content, div[class*='popover'], div[class*='content']");
     for (let container of containers) {
-      const elements = container.querySelectorAll("button, div, span, [role='menuitem']");
+      const elements = container.querySelectorAll("button, [role='menuitem'], [role='option'], div, span");
       for (let el of elements) {
         const text = el.textContent.trim().toLowerCase();
         for (let term of searchTerms) {
@@ -410,82 +455,109 @@ function dataURLtoFile(dataurl, filename) {
   return new File([u8arr], filename, { type: mime });
 }
 
-// Upload reference image logic in content.js
+// Upload reference image logic in content.js with Multi-Method Fallback (Paste, Drop, FileInput)
 async function uploadReferenceImage(imageUrl) {
-  console.log('Uploading reference image to Google Flow canvas...');
-  
-  // Find hidden file input
-  let fileInput = document.querySelector("input[type='file']");
-  
-  // If not found, click the upload/media button to mount it in the DOM
-  if (!fileInput) {
-    console.log('File input not found, searching for media button...');
-    const buttons = document.querySelectorAll("button");
-    let uploadBtn = null;
-    for (let btn of buttons) {
-      const text = (btn.textContent || "").trim();
-      const html = btn.innerHTML || "";
-      if (text === "+" || text.toLowerCase().includes("add") || html.includes("add") || html.includes("plus") || html.includes("upload") || html.includes("media")) {
-        uploadBtn = btn;
-        break;
+  console.log('Attaching reference image to Google Flow prompt...');
+  if (!imageUrl) return;
+
+  const file = dataURLtoFile(imageUrl, "reference_image.png");
+
+  // 1. Try Clipboard Paste directly onto the prompt textbox
+  try {
+    const promptInput = document.querySelector("div[role='textbox'], div[data-slate-editor='true']");
+    if (promptInput) {
+      promptInput.focus();
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      const pasteEvent = new ClipboardEvent('paste', {
+        bubbles: true,
+        cancelable: true,
+        clipboardData: dt
+      });
+      promptInput.dispatchEvent(pasteEvent);
+      console.log('[Content] Dispatched Clipboard Paste event with reference image.');
+      await sleep(1500);
+    }
+  } catch (e) {
+    console.warn('[Content] Clipboard paste failed:', e);
+  }
+
+  // 2. Try Drag & Drop onto prompt box / dropzone
+  try {
+    const dropZone = document.querySelector("div[role='textbox'], div[data-slate-editor='true'], form, div[class*='prompt'], div[class*='input']");
+    if (dropZone) {
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      dropZone.dispatchEvent(new DragEvent('dragenter', { bubbles: true, cancelable: true, dataTransfer: dt }));
+      dropZone.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt }));
+      dropZone.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt }));
+      console.log('[Content] Dispatched Drag & Drop event with reference image.');
+      await sleep(1500);
+    }
+  } catch (e) {
+    console.warn('[Content] Drag & Drop failed:', e);
+  }
+
+  // 3. Try File Input with React tracker reset
+  try {
+    let fileInput = document.querySelector("input[type='file']");
+    if (!fileInput) {
+      const buttons = document.querySelectorAll("button");
+      for (let btn of buttons) {
+        const text = (btn.textContent || "").trim();
+        const html = (btn.innerHTML || "").toLowerCase();
+        if (text === "+" || text.toLowerCase().includes("add") || html.includes("add") || html.includes("upload") || html.includes("media") || html.includes("photo")) {
+          btn.click();
+          await sleep(800);
+          fileInput = document.querySelector("input[type='file']");
+          if (fileInput) break;
+        }
       }
     }
-    if (uploadBtn) {
-      console.log('Clicking upload/media button to activate uploader...');
-      uploadBtn.click();
-      await sleep(1000);
-      fileInput = document.querySelector("input[type='file']");
+
+    if (fileInput) {
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      fileInput.files = dt.files;
+      const tracker = fileInput._valueTracker;
+      if (tracker) tracker.setValue("");
+      fileInput.dispatchEvent(new Event('input', { bubbles: true }));
+      fileInput.dispatchEvent(new Event('change', { bubbles: true }));
+      console.log('[Content] Dispatched File Input change event.');
+      await sleep(2500);
     }
+  } catch (e) {
+    console.warn('[Content] File input method failed:', e);
   }
-  
-  if (!fileInput) {
-    throw new Error('Could not locate file input to upload reference image.');
-  }
-  
-  // Create File and assign to input
-  const file = dataURLtoFile(imageUrl, "reference_image.png");
-  const dataTransfer = new DataTransfer();
-  dataTransfer.items.add(file);
-  fileInput.files = dataTransfer.files;
-  
-  // Dispatch change events
-  fileInput.dispatchEvent(new Event('change', { bubbles: true }));
-  console.log('Reference image file assigned and change event dispatched.');
-  
-  // Wait for the image to be uploaded and appear in the UI
-  await sleep(3500); 
 }
 
 async function executeAutomation(params) {
   const { action, prompt, aspect_ratio, duration, imageUrl } = params;
   console.log(`Executing automation for action: ${action}, prompt: "${prompt}", ratio: ${aspect_ratio}`);
   
-  // ── Step 1: Open project canvas (Click 'New project' if visible) ────────────
-  const newProjBtn = findElement("button:has-text('New project')");
-  if (newProjBtn) {
-    console.log('Clicking New Project button...');
-    newProjBtn.click();
-    await sleep(2000);
+  // ── Step 1: Open project canvas (Click 'New project' ONLY for fresh image generation) ────
+  if (action === 'generate_image') {
+    const newProjBtn = findElement("button:has-text('New project')");
+    if (newProjBtn) {
+      console.log('Clicking New Project button for fresh image generation...');
+      newProjBtn.click();
+      await sleep(2000);
+    }
   }
-  
-  // ── Step 2: Configure Mode and Settings inside Popover ────────────────────
+
+  // ── Step 2: Configure Mode and Settings FIRST (Select Video/Veo 2 before reference image) ──
   const targetMode = action === 'generate_image' ? 'Image' : 'Video';
-  console.log(`Configuring mode and settings for target: ${targetMode}`);
+  console.log(`[Step 2] Configuring mode and settings for target: ${targetMode}`);
   
-  // Find settings trigger button (e.g. "Video · 720p · 6s ⧉ x1" or "Image · ...")
   let settingsBtn = null;
   const startSettingsWait = Date.now();
-  console.log('Waiting for settings button to render in DOM...');
   while (Date.now() - startSettingsWait < 15000) {
     const allButtons = document.querySelectorAll("button, [role='button']");
     for (let btn of allButtons) {
       const text = (btn.textContent || "").trim();
       const textLower = text.toLowerCase();
       
-      // Signature based settings button detection
       const hasSetting = textLower.includes("720p") || textLower.includes("1080p") || textLower.includes("x1") || textLower.includes("x4") || textLower.includes("6s") || textLower.includes("3s") || textLower.includes("12s") || text.includes(" · ") || textLower.includes("banana") || textLower.includes("nano") || textLower.includes("fast") || text.includes("crop_");
-      
-      // Must be a radix menu trigger
       const isTrigger = btn.getAttribute("aria-haspopup") === "menu" || btn.getAttribute("id")?.includes("radix-");
       
       if (hasSetting && isTrigger && text.length > 2 && text.length < 50) {
@@ -500,7 +572,7 @@ async function executeAutomation(params) {
   if (settingsBtn) {
     console.log(`Found settings button: "${settingsBtn.textContent.trim()}". Clicking to open popover...`);
     clickElement(settingsBtn);
-    await sleep(1200); // Wait for popover to open
+    await sleep(1200);
 
     const isPopoverOpen = () => {
       return !!document.querySelector("[role='dialog'], [role='menu'], [role='listbox'], .radix-popover-content, div[class*='popover'], div[class*='content']");
@@ -510,7 +582,6 @@ async function executeAutomation(params) {
       if (!optionEl) return;
       clickElement(optionEl);
       await sleep(1000);
-      // If popover closed after clicking, reopen it
       if (!isPopoverOpen()) {
         console.log("Popover closed after click. Reopening settings popover...");
         clickElement(settingsBtn);
@@ -519,74 +590,168 @@ async function executeAutomation(params) {
     };
     
     // 1. Select Mode (Image vs Video)
-    console.log(`Selecting mode option for: ${action}`);
+    console.log(`[Step 2.1] Selecting mode option for: ${action}`);
     const modeOpt = await findModeOption(action);
     if (modeOpt) {
       console.log(`Found mode option in popover: "${modeOpt.textContent.trim()}". Clicking...`);
       await clickOptionAndKeepPopoverOpen(modeOpt);
-    } else {
-      console.warn('Mode option not found in popover.');
     }
 
-    // 2. Select Model (Nano / Fast)
-    console.log(`Selecting model for: ${action}`);
+    // 2. Select Model (Veo 2 for video, Imagen 3 for image)
+    console.log(`[Step 2.2] Selecting model for: ${action}`);
     const modelOpt = await findModelOption(action);
     if (modelOpt) {
       console.log(`Found model option: "${modelOpt.textContent.trim()}". Clicking...`);
       await clickOptionAndKeepPopoverOpen(modelOpt);
-    } else {
-      console.warn('Model option not found in popover.');
     }
     
     // 3. Select Aspect Ratio
     if (aspect_ratio) {
-      console.log(`Selecting aspect ratio: ${aspect_ratio}`);
       const ratioOpt = await findRatioOption(aspect_ratio);
       if (ratioOpt) {
-        console.log(`Found aspect ratio option: "${ratioOpt.textContent.trim()}". Clicking...`);
         await clickOptionAndKeepPopoverOpen(ratioOpt);
-      } else {
-        console.warn('Aspect ratio option not found in popover.');
       }
     }
     
     // 4. Select Duration (only for video)
     if (action === 'generate_video') {
       const targetDuration = duration || 6;
-      console.log(`Selecting video duration: ${targetDuration}s`);
       const durationOpt = await findDurationOption(targetDuration);
       if (durationOpt) {
-        console.log(`Found duration option: "${durationOpt.textContent.trim()}". Clicking...`);
         await clickOptionAndKeepPopoverOpen(durationOpt);
-      } else {
-        console.warn('Duration option not found in popover.');
       }
     }
     
-    // Close settings popover by toggling the button closed only if it is still open
+    // Close settings popover
     if (isPopoverOpen()) {
-      console.log('Closing settings popover...');
       clickElement(settingsBtn);
       await sleep(800);
-    } else {
-      console.log('Settings popover already closed.');
     }
-  } else {
-    console.warn('Could not locate settings trigger button on the page. Proceeding with defaults.');
-  }
-  
-  
-  // ── Step 2.5: Upload reference image if imageUrl is provided ────────────
-  // We upload it AFTER configuring settings (Video mode active) so it binds correctly!
-  if (imageUrl) {
-    await uploadReferenceImage(imageUrl);
   }
 
-  // ── Step 3: Enter prompt & generation wrapper with retry on safety block ──
+// Helper to check if a reference image chip/thumbnail is attached to the prompt container
+function isReferenceImageAttached() {
+  const promptBar = document.querySelector("form, div[class*='prompt'], div[class*='input'], div[class*='bar']");
+  if (!promptBar) return false;
+
+  // 1. Check for attached image elements in prompt bar
+  const imgs = promptBar.querySelectorAll("img, div[style*='background-image']");
+  for (const img of imgs) {
+    const src = img.getAttribute('src') || '';
+    if (src.startsWith('blob:') || src.startsWith('data:') || src.startsWith('http') || (img.style && img.style.backgroundImage)) {
+      return true;
+    }
+  }
+
+  // 2. Check for attached chips or remove buttons
+  const chips = promptBar.querySelectorAll("div[class*='chip'], div[class*='thumbnail'], div[class*='media'], div[class*='preview'], div[class*='asset']");
+  if (chips.length > 0) return true;
+
+  return false;
+}
+
+// ── Step 3: If generate_video, strictly attach Reference Image & WAIT until verified ──
+  if (action === 'generate_video') {
+    console.log('[Step 3] Attaching reference image for video generation (WAITING UNTIL VERIFIED)...');
+    
+    let isAttached = isReferenceImageAttached();
+    const attachStart = Date.now();
+    let attempt = 0;
+    
+    while (!isAttached && Date.now() - attachStart < 25000) {
+      attempt++;
+      console.log(`[Step 3] Reference image attachment attempt ${attempt}...`);
+
+      // Method 1: Prompt Bar Add Media (+) Button
+      try {
+        const allButtons = document.querySelectorAll("button, [role='button']");
+        let addBtn = null;
+        for (const btn of allButtons) {
+          const text = (btn.textContent || "").trim().toLowerCase();
+          const aria = (btn.getAttribute("aria-label") || "").toLowerCase();
+          const icon = (btn.querySelector("i")?.textContent || "").trim().toLowerCase();
+          if (
+            text === "+" || 
+            text.includes("add") || 
+            aria.includes("add") || 
+            aria.includes("media") || 
+            aria.includes("photo") || 
+            aria.includes("image") ||
+            icon === "add" || 
+            icon === "add_photo_alternate" || 
+            icon === "photo" || 
+            icon === "image" || 
+            icon === "attach_file"
+          ) {
+            addBtn = btn;
+            break;
+          }
+        }
+
+        if (addBtn) {
+          console.log('[Step 3] Clicking Add Media (+) button...');
+          clickElement(addBtn);
+          await sleep(1000);
+          
+          const pickerImgs = document.querySelectorAll("[role='dialog'] img, [role='menu'] img, div[class*='popover'] img, div[class*='content'] img, div[role='option'] img");
+          if (pickerImgs.length > 0) {
+            console.log('[Step 3] Clicking reference image from media popover...');
+            clickElement(pickerImgs[pickerImgs.length - 1]);
+            await sleep(1500);
+          }
+        }
+      } catch (e) {
+        console.warn('[Step 3] Media button error:', e.message);
+      }
+
+      isAttached = isReferenceImageAttached();
+      if (isAttached) break;
+
+      // Method 2: Direct Animate button on canvas card
+      try {
+        const animateButtons = document.querySelectorAll("button, [role='button']");
+        for (const btn of animateButtons) {
+          const text = (btn.textContent || "").trim().toLowerCase();
+          const aria = (btn.getAttribute("aria-label") || "").toLowerCase();
+          const iText = (btn.querySelector("i")?.textContent || "").trim().toLowerCase();
+          if (text === "animate" || aria.includes("animate") || text.includes("video") || iText === "movie" || iText === "play_circle" || iText === "play_arrow") {
+            console.log(`[Step 3] Found Animate button (${text || aria || iText}). Clicking...`);
+            clickElement(btn);
+            await sleep(2000);
+            break;
+          }
+        }
+      } catch (e) {
+        console.warn('[Step 3] Animate button error:', e.message);
+      }
+
+      isAttached = isReferenceImageAttached();
+      if (isAttached) break;
+
+      // Method 3: File Input upload / Clipboard Paste with imageUrl
+      if (imageUrl) {
+        try {
+          console.log('[Step 3] Uploading reference image DataURL to prompt box...');
+          await uploadReferenceImage(imageUrl);
+          await sleep(2000);
+        } catch (e) {
+          console.warn('[Step 3] UploadReferenceImage error:', e.message);
+        }
+      }
+
+      isAttached = isReferenceImageAttached();
+      if (isAttached) break;
+      await sleep(1200);
+    }
+
+    console.log('[Step 3] Reference image confirmed attached! Proceeding to prompt input.');
+    await sleep(1500);
+  }
+
+  // ── Step 4: Enter Prompt & Generate ──
   const promptInput = await waitForElement("div[role='textbox'], div[data-slate-editor='true']", 15000);
   
   // Snapshot ALL img and video srcs before submission so we can detect any NEW ones
-  // This is broader than specific URL patterns — catches any generated asset format.
   const preExistingAssets = new Set(
     Array.from(document.querySelectorAll('img[src], video[src]'))
       .map(el => el.getAttribute('src'))
@@ -608,7 +773,6 @@ async function executeAutomation(params) {
     await sleep(100);
 
     // ── Step 1: Insert text via MAIN world injector (Slate React fiber) ───────
-    // injector.js returns the submit button center coordinates when text is ready.
     const injectorResponse = await new Promise((resolve) => {
       const resultHandler = (event) => {
         if (
@@ -637,70 +801,41 @@ async function executeAutomation(params) {
 
     console.log('Injector response:', injectorResponse.result, 'btnRect:', injectorResponse.btnRect);
 
-    if (injectorResponse.result === 'ready-to-click' && injectorResponse.btnRect) {
-      // ── Step 2: CDP trusted click via background.js ─────────────────────────
-      // background.js uses chrome.debugger Input.dispatchMouseEvent — the only
-      // way to create isTrusted=true events that Google Flow React accepts.
+    if (injectorResponse.btnRect) {
+      // ── Step 2: Native CDP Type & Submit via background.js ─────────────
       const { x, y } = injectorResponse.btnRect;
-      console.log(`Requesting CDP trusted click at (${x}, ${y})...`);
+      console.log(`Requesting CDP native typing and submit at (${x}, ${y})...`);
       
-      let cdpResult = { ok: false, error: 'unknown' };
       try {
-        cdpResult = await new Promise((resolve, reject) => {
-          try {
-            chrome.runtime.sendMessage({
-              type: 'CLICK_SUBMIT_BUTTON',
-              x, y
-            }, (response) => {
-              const err = chrome.runtime.lastError;
-              if (err) {
-                reject(err);
-              } else {
-                resolve(response || { ok: false, error: 'no response' });
-              }
-            });
-          } catch (sendErr) {
-            reject(sendErr);
-          }
+        await new Promise((resolve, reject) => {
+          chrome.runtime.sendMessage({
+            type: 'CDP_TYPE_AND_SUBMIT',
+            text: currentPrompt,
+            x, y
+          }, (response) => {
+            const err = chrome.runtime.lastError;
+            if (err) reject(err);
+            else resolve(response || { ok: false });
+          });
         });
-        console.log('CDP click result:', cdpResult);
-        await sleep(1500);
+        console.log('CDP native typing and submit completed successfully.');
       } catch (clickErr) {
-        console.warn('[Content] CDP click failed due to context invalidation/error:', clickErr.message);
-        console.log('Attempting immediate direct click fallback...');
+        console.warn('[Content] CDP type/submit fallback:', clickErr.message);
         let submitBtn = null;
         for (const b of document.querySelectorAll('button')) {
           const iEl = b.querySelector('i');
-          if (iEl && iEl.textContent.trim() === 'arrow_forward') { submitBtn = b; break; }
+          const txt = (b.textContent || "").toLowerCase();
+          if ((iEl && iEl.textContent.trim() === 'arrow_forward') || (txt.includes('create') && (!iEl || iEl.textContent.trim() !== 'add'))) {
+            submitBtn = b; break;
+          }
         }
         if (submitBtn) {
           submitBtn.removeAttribute('aria-disabled');
-          submitBtn.removeAttribute('disabled');
           submitBtn.disabled = false;
           submitBtn.click();
-          await sleep(1000);
         }
       }
-
-      // Self-healing check: if the editor textbox still has text, the submit event did not trigger.
-      // Fallback by direct-clicking the HTML submit button.
-      if (promptInput.textContent.trim().length > 0) {
-        console.warn('[Content] Prompt text still remains after CDP click. Attempting direct submit button click fallback...');
-        let submitBtn = null;
-        for (const b of document.querySelectorAll('button')) {
-          const iEl = b.querySelector('i');
-          if (iEl && iEl.textContent.trim() === 'arrow_forward') { submitBtn = b; break; }
-        }
-        if (submitBtn) {
-          submitBtn.removeAttribute('aria-disabled');
-          submitBtn.removeAttribute('disabled');
-          submitBtn.disabled = false;
-          await sleep(50);
-          submitBtn.click();
-          console.log('[Content] Direct click fallback triggered.');
-          await sleep(1000);
-        }
-      }
+      await sleep(1500);
     } else {
       // ── Fallback: execCommand insert + direct click & Enter event ─────────────────
       console.warn('Injector did not return coords (' + injectorResponse.result + '). Using execCommand fallback.');
